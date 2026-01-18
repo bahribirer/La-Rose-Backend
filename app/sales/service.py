@@ -15,15 +15,49 @@ async def save_scan_report(
     # ================== NORMALIZE ITEMS ==================
     normalized_items = []
 
+    # 🔥 RECOVERY: TELEFON VERIYI SILIYORSA HAFIZADAN GETIR
+    # En son taranan ham raporu bul (son 1 saat içindeki)
+    last_scan = await db.scan_raw_reports.find_one(
+        {"source": "ocr"},
+        sort=[("createdAt", -1)]
+    )
+
+    recovery_map = {}
+    if last_scan:
+        print("🧠 RECOVERY MODE: Found Raw Scan", last_scan.get("_id"))
+        for ri in last_scan.get("items", []):
+            if ri.get("urun_id"):
+                recovery_map[ri["urun_id"]] = {
+                    "ecz_kar": ri.get("ecz_kar", 0.0),
+                    "maliyet": ri.get("maliyet", 0.0),
+                    "birim_fiyat": ri.get("birim_fiyat"),
+                    "tutar": ri.get("tutar"),
+                }
+
     for item in items:
         miktar = item.miktar or 0
+        
+        # 1. Telefondan gelen veri
+        ecz_kar = item.ecz_kar
         maliyet = item.maliyet or 0.0
 
-        # 🔥 PROFIT KURALI
-        ecz_kar = item.ecz_kar if item.ecz_kar is not None else 0.0
+        # 2. Telefondan boş geldiyse (0 veya None), hafızadan bak
+        if (ecz_kar is None or ecz_kar == 0) and item.urun_id in recovery_map:
+            print(f"🔧 RESTORING PROFIT for {item.urun_id}")
+            rec = recovery_map[item.urun_id]
+            ecz_kar = rec["ecz_kar"]
+            maliyet = rec["maliyet"]
+
+            # Admin alanlarını da kurtar
+            if item.birim_fiyat is None:
+                item.birim_fiyat = rec["birim_fiyat"]
+            if item.tutar is None:
+                item.tutar = rec["tutar"]
+
+        ecz_kar = ecz_kar if ecz_kar is not None else 0.0
 
         normalized_items.append({
-    "urun_id": item.urun_id,
+            "urun_id": item.urun_id,
     "urun_name": item.urun_name,
     "miktar": miktar,
 
