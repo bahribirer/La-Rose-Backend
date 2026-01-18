@@ -52,8 +52,11 @@ class SaleItemFromScan(BaseModel):
         ge=0,
         le=1,
         description="OCR eşleşme güveni (0–1)",
-        alias="confidence"
-    )
+    model_config = {
+        "extra": "ignore", 
+        "populate_by_name": True,
+        "from_attributes": True
+    }
 
 
 class SaleReportCreateRequest(BaseModel):
@@ -64,7 +67,7 @@ class SaleReportCreateRequest(BaseModel):
     )
 
     model_config = {
-        "extra": "ignore", # Allow extra fields (safety)
-        "populate_by_name": True, # Allow snake_case input too
+        "extra": "ignore",
+        "populate_by_name": True,
         "from_attributes": True
     }

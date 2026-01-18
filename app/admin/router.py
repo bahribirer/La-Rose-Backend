@@ -237,7 +237,6 @@ async def admin_report_detail(report_id: str):
 
     items = []
     async for i in cursor:
-        print(f"🔍 ADMIN READING DB ITEM: {i.get('productId')} -> Keys: {list(i.keys())} | unitPrice: {i.get('unitPrice')} | unit_price: {i.get('unit_price')}")
         items.append({
             "id": str(i["_id"]),
             "product_id": i.get("productId"),

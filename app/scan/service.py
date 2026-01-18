@@ -69,10 +69,6 @@ async def scan_report_bytes(binary: bytes) -> dict:
     items = result.get("items", [])
 
     # ---------- 🔥 SAVE RAW OCR RESULT ----------
-    print("\n🔍 DEBUG: PRE-SAVE SCAN ITEMS CHECK:")
-    for x in items:
-        print(f"   💊 Item {x.urun_id}: birim_fiyat={x.birim_fiyat} (alias unitPrice={getattr(x, 'unitPrice', 'N/A')})")
-
     scan_doc = {
         "createdAt": datetime.utcnow(),
         "source": "ocr",
@@ -84,11 +80,6 @@ async def scan_report_bytes(binary: bytes) -> dict:
                 "urun_name": i.urun_name,
                 "miktar": i.miktar,
 
-                # 🔥 DEBUG LOG
-                # (We use a list comprehension side-effect or just trust the logic, but let's print)
-                # print(f"DEBUG SCAN SAVE: {i.urun_id} -> {i.birim_fiyat}") or similar 
-                # actually print outside
-            
                 # 🔥 ADMIN-ONLY
                 "birim_fiyat": i.birim_fiyat,
                 "tutar": i.tutar,
