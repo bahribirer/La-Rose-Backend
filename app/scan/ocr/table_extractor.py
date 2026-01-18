@@ -19,11 +19,35 @@ def extract_table_items(document) -> List[DocumentLineItem]:
         print(f"TABLE COUNT (page {page_idx}):", len(page.tables))
 
         for table in page.tables:
+            # 1️⃣ HEADER ANALYSIS
+            qty_col_idx = -1
+            
+            # Check header rows
+            rows_to_scan = list(table.header_rows)
+            # If no formal header, maybe first row is header? (Risk: skipping data)
+            # Let's trust Document AI structure first.
+            
+            for h_row in rows_to_scan:
+                for col_idx, cell in enumerate(h_row.cells):
+                    txt = _get_text(document, cell.layout.text_anchor).upper()
+                    # Keywords for Sold Quantity
+                    if any(x in txt for x in ["ADET", "MİKTAR", "SATILAN", "SAT.AD"]):
+                        # Avoid "STOK ADET" or "KDV ADET"
+                        if "STOK" in txt or "MEVCUT" in txt:
+                            continue
+                        qty_col_idx = col_idx
+                        print(f"🎯 FOUND QTY COLUMN at index {col_idx}: {txt}")
+                        break
+                if qty_col_idx != -1:
+                    break
+
             for row in table.body_rows:
                 raw_parts: List[str] = []
                 tokens: List[DocumentToken] = []
+                
+                exact_qty = None
 
-                for cell in row.cells:
+                for col_idx, cell in enumerate(row.cells):
                     cell_text = _get_text(
                         document,
                         cell.layout.text_anchor
@@ -34,6 +58,20 @@ def extract_table_items(document) -> List[DocumentLineItem]:
 
                     cell_text = cell_text.strip()
                     raw_parts.append(cell_text)
+                    
+                    # 2️⃣ EXACT COLUMN EXTRACTION
+                    if col_idx == qty_col_idx:
+                        # Try to extract integer from this specific cell
+                        # Sometimes cell has "1 Adet" or "1"
+                        nums = re.findall(r"\b\d+\b", cell_text)
+                        if nums:
+                            try:
+                                val = int(nums[0]) # First int in the strictly identified column
+                                if 0 < val < 1000:
+                                    exact_qty = val
+                                    print(f"   🎯 EXACT QTY DETECTED: {val} (from Col {col_idx})")
+                            except:
+                                pass
 
                     verts = cell.layout.bounding_poly.normalized_vertices
                     xs = [v.x for v in verts if v.x is not None]
@@ -64,15 +102,15 @@ def extract_table_items(document) -> List[DocumentLineItem]:
 
                 if not raw_parts:
                     continue
-
-                items.append(
-                    DocumentLineItem(
-                        raw_text=" | ".join(raw_parts),
-                        tokens=tokens,
-                        source="TABLE",
-                        confidence=0.95,
-                    )
+                
+                item = DocumentLineItem(
+                    raw_text=" | ".join(raw_parts),
+                    tokens=tokens,
+                    source="TABLE",
+                    confidence=0.95,
                 )
+                item.exact_quantity_match = exact_qty
+                items.append(item)
 
     return items
 

@@ -12,10 +12,17 @@ def table_item_to_sale_item(item, product_map):
     if not product:
         return None
 
+    # 🔥 STRUCTURAL PRIORITY
+    candidates = item.quantity_candidates
+    if item.exact_quantity_match:
+        # If we found a quantity in the specific "Adet" column, prioritize it!
+        # But verify it with Smart Math logic inside normalizer.
+        candidates = [item.exact_quantity_match] + [c for c in candidates if c != item.exact_quantity_match]
+
     # 🔥 OCR'dan gelen fiyatları semantik olarak ayır
     unit_price, maliyet, ecz_kar, tutar, selected_qty = normalize_product_total_prices(
         floats=item.raw_prices,
-        candidate_quantities=item.quantity_candidates,
+        candidate_quantities=candidates,
     )
     print("""
 🧪 TABLE ITEM → SALE ITEM

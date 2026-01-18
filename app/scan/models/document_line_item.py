@@ -28,3 +28,7 @@ class DocumentLineItem:
         self.line_total: Optional[float] = None
         self.ecz_kar: Optional[float] = None
         self.maliyet: Optional[float] = None
+        
+        # 🔥 SMART TABLE PARSING
+        self.quantity_candidates: List[int] = []  # All integers in row
+        self.exact_quantity_match: Optional[int] = None  # From specific column
