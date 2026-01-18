@@ -210,11 +210,21 @@ async def admin_reports():
             "id": str(r["_id"]),
             "name": r.get("name"),
             "createdAt": r.get("createdAt"),
-            "summary": r.get("summary", {
-                "total_items": 0,
-                "total_profit": 0,
-                "total_cost": 0,
-            }),
+        summary = r.get("summary", {
+            "total_items": 0,
+            "total_profit": 0,
+            "total_cost": 0,
+        })
+        
+        # 🔥 FIX: Calculate revenue on the fly if missing
+        if "total_revenue" not in summary:
+            summary["total_revenue"] = summary.get("total_profit", 0) + summary.get("total_cost", 0)
+
+        items.append({
+            "id": str(r["_id"]),
+            "name": r.get("name"),
+            "createdAt": r.get("createdAt"),
+            "summary": summary,
         })
 
     return items
@@ -250,17 +260,23 @@ async def admin_report_detail(report_id: str):
             # camelCase for Frontend
             "unitPrice": float(i.get("unitPrice") or i.get("unit_price") or 0),
             "totalPrice": float(i.get("totalPrice") or i.get("total_price") or 0),
+            "price": float(i.get("unitPrice") or i.get("unit_price") or 0),
             
             "profit": float(i.get("profit") or 0),
             "cost": float(i.get("cost") or 0),
             "confidence": float(i.get("confidence") or 0),
         })
 
+    # 🔥 FIX: Admin Panel needs total_revenue (profit + cost)
+    summary = report.get("summary", {})
+    if "total_revenue" not in summary:
+        summary["total_revenue"] = summary.get("total_profit", 0) + summary.get("total_cost", 0)
+
     return {
         "id": str(report["_id"]),
         "name": report.get("name", "Satış Raporu"),
         "createdAt": report.get("createdAt"),
-        "summary": report.get("summary", {}),
+        "summary": summary,
         "items": items
     }
 
