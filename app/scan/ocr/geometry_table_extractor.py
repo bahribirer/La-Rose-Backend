@@ -41,72 +41,94 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 "obj": token
             })
 
-        # 2️⃣ Group by Rows (Cluster Y coordinates)
-        # Sort by Y
+        # 2️⃣ Group by Rows (Smart Vertical Overlap)
+        # Sort by Y-center primarily
         all_tokens.sort(key=lambda k: k["y"])
         
-        # Stricter tolerance to prevent merging lines (reduced from 0.010)
-        Y_TOLERANCE = 0.004
-        
         rows = []
-        current_row = []
         if all_tokens:
-            current_y = all_tokens[0]["y"]
+            current_row = [all_tokens[0]]
+            # Track the geometric bounds of the current row group
+            row_y_min = all_tokens[0]["y"] - (all_tokens[0]["obj"].layout.bounding_poly.normalized_vertices[2].y - all_tokens[0]["obj"].layout.bounding_poly.normalized_vertices[0].y) / 2
+            row_y_max = all_tokens[0]["y"] + (all_tokens[0]["obj"].layout.bounding_poly.normalized_vertices[2].y - all_tokens[0]["obj"].layout.bounding_poly.normalized_vertices[0].y) / 2
             
-            for t in all_tokens:
-                # Use a very strict tolerance for grouping
-                if abs(t["y"] - current_y) < Y_TOLERANCE: 
-                    current_row.append(t)
+            for t in all_tokens[1:]:
+                # Calculate token height/bounds
+                h = t["obj"].layout.bounding_poly.normalized_vertices[2].y - t["obj"].layout.bounding_poly.normalized_vertices[0].y
+                t_y_min = t["y"] - h/2
+                t_y_max = t["y"] + h/2
+                
+                # Dynamic Row Bounds (average of current row)
+                avg_y = sum(x["y"] for x in current_row) / len(current_row)
+                avg_h = sum((x["obj"].layout.bounding_poly.normalized_vertices[2].y - x["obj"].layout.bounding_poly.normalized_vertices[0].y) for x in current_row) / len(current_row)
+                
+                r_min = avg_y - avg_h/1.5 # Relaxed top
+                r_max = avg_y + avg_h/1.5 # Relaxed bottom
+                
+                # Check Overlap
+                # If token overlaps significantly with the row's vertical band
+                overlap = min(t_y_max, r_max) - max(t_y_min, r_min)
+                if overlap > 0:
+                     current_row.append(t)
                 else:
-                    # New row
                     _finalize_row(rows, current_row)
                     current_row = [t]
-                    current_y = t["y"]
             
             if current_row:
                 _finalize_row(rows, current_row)
 
-        # 3️⃣ Detect Headers & Define Column Zones (X-Ranges)
-        col_zones = {} 
+        # 3️⃣ Detect Headers & Define DISJOINT Column Zones
+        header_tokens = []
         
-        # Scan first 10 rows for headers (accumulate zones)
+        # Scan first 10 rows for headers
         for i in range(min(len(rows), 10)):
             row = rows[i]
             row_text = " ".join([t["text"].upper() for t in row])
             
-            # Heuristic: Check for Header keywords
-            # We look for ANY known header to trigger a scan of the line
             if any(k in row_text for k in ["BARKOD", "URUN", "FIYAT", "ADET", "MALIYET", "KAR", "STOK"]):
                 for t in row:
                     txt = t["text"].strip().upper()
                     
-                    # QTY Zone
-                    if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET"]:
-                        col_zones["qty"] = (t["x_min"] - 0.02, t["x_max"] + 0.02)
+                    # Normalize known headers for sorting
+                    h_type = None
+                    if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET"]: h_type = "qty"
+                    elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM"]: h_type = "total"
+                    elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT"]: h_type = "price"
+                    elif txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]: h_type = "profit"
+                    elif txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]: h_type = "cost"
+                    elif txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]: h_type = "stock"
                     
-                    # TOTAL Zone
-                    if txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM"]:
-                        col_zones["total"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
-                        
-                    # PRICE Zone
-                    if txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT"]:
-                         col_zones["price"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
+                    if h_type:
+                        header_tokens.append({"type": h_type, "x": t["x"], "x_min": t["x_min"], "x_max": t["x_max"]})
 
-                    # PROFIT Zone (New!)
-                    # Strict check to avoid "KARSITI" matching "KAR"
-                    if txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]:
-                        col_zones["profit"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
-
-                    # COST Zone (New!)
-                    if txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]:
-                        col_zones["cost"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
-
-                    # STOCK Zone (New!)
-                    if txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]:
-                        col_zones["stock"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
-        
-        if col_zones:
-             print("📐 GEOMETRIC HEADERS FOUND:", col_zones)
+        col_zones = {}
+        if header_tokens:
+            # Sort headers by X position
+            header_tokens.sort(key=lambda k: k["x"])
+            
+            # Create disjoint zones based on midpoints between headers
+            # Start from 0.0 to first header midpoint
+            # Then mid-to-mid
+            # Last header to 1.0
+            
+            for i, h in enumerate(header_tokens):
+                # Start boundary
+                if i == 0:
+                    start = 0.0
+                else:
+                    prev = header_tokens[i-1]
+                    start = (prev["x_max"] + h["x_min"]) / 2
+                
+                # End boundary
+                if i == len(header_tokens) - 1:
+                    end = 1.0
+                else:
+                    nxt = header_tokens[i+1]
+                    end = (h["x_max"] + nxt["x_min"]) / 2
+                    
+                col_zones[h["type"]] = (start, end)
+                
+            print("📐 GEOMETRIC HEADERS FOUND (DISJOINT):", col_zones)
 
         # 4️⃣ Extract Data from Rows using Column Zones (STRICT MODE)
         for row in rows:
