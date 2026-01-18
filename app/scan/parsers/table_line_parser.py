@@ -8,7 +8,34 @@ PRICE_RE = re.compile(
 )
 
 def normalize_tr_price(v: str) -> float:
-    return float(v.replace(".", "").replace(",", "."))
+    v = v.strip()
+    if not v: return 0.0
+    
+    # Smart detection for US vs TR format
+    # Case 1: Both separators exist (e.g., 1,234.56 or 1.234,56)
+    if "." in v and "," in v:
+        last_dot = v.rfind(".")
+        last_comma = v.rfind(",")
+        if last_dot > last_comma:
+            # US Format: 1,234.56 -> Remove comma, keep dot
+            return float(v.replace(",", ""))
+        else:
+            # TR Format: 1.234,56 -> Remove dot, replace comma with dot
+            return float(v.replace(".", "").replace(",", "."))
+            
+    # Case 2: Only Dot (e.g., 123.45 or 1.234)
+    elif "." in v:
+        # Ambiguous: 1.234 could be 1234 or 1.234
+        # Heuristic: If it has 2 decimal places, assume decimal (common in currency)
+        # Or if the report seems to use dots as decimals elsewhere.
+        # Given the "Price 0" bug, assuming dot-as-decimal determines the fix for "880.00" -> 880.0
+        return float(v)
+        
+    # Case 3: Only Comma (e.g., 123,45)
+    elif "," in v:
+        return float(v.replace(",", "."))
+        
+    return float(v)
 
 def parse_table_line(item):
     print("\n🧩 PARSING LINE:", item.raw_text)

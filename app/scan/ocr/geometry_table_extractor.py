@@ -225,11 +225,31 @@ def _finalize_row(rows, current_row):
 
 
 def _parse_number(text: str):
-    clean = text.replace(".", "").replace(",", ".")
+    text = text.strip()
+    if not text: return None
+    
     try:
-        if "," in text or "." in text: 
-            return float(clean)
-        return int(clean)
+        # Smart detection for US vs TR format
+        # Case 1: Both separators exist (e.g., 1,234.56 or 1.234,56)
+        if "." in text and "," in text:
+            last_dot = text.rfind(".")
+            last_comma = text.rfind(",")
+            if last_dot > last_comma:
+                # US Format: 1,234.56 -> Remove comma, keep dot
+                return float(text.replace(",", ""))
+            else:
+                # TR Format: 1.234,56 -> Remove dot, replace comma with dot
+                return float(text.replace(".", "").replace(",", "."))
+                
+        # Case 2: Only Dot (e.g., 123.45 or 1.234)
+        elif "." in text:
+             return float(text)
+            
+        # Case 3: Only Comma (e.g., 123,45)
+        elif "," in text:
+            return float(text.replace(",", "."))
+            
+        return int(text)
     except:
         return None
 
