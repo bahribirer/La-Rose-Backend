@@ -15,31 +15,35 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
     for page in document.pages:
         # 1️⃣ Collect all tokens with their geometry
         all_tokens = []
-        for block in page.blocks:
-            for paragraph in block.paragraphs:
-                for word in paragraph.words:
-                    text = _get_text(document, word.layout.text_anchor)
-                    if not text.strip():
-                        continue
-                        
-                    # Get center coordinates
-                    vertices = word.layout.bounding_poly.normalized_vertices
-                    if not vertices:
-                        continue
-                        
-                    y_center = sum(v.y for v in vertices) / len(vertices)
-                    x_center = sum(v.x for v in vertices) / len(vertices)
-                    x_min = min(v.x for v in vertices)
-                    x_max = max(v.x for v in vertices)
-                    
-                    all_tokens.append({
-                        "text": text,
-                        "y": y_center,
-                        "x": x_center,
-                        "x_min": x_min,
-                        "x_max": x_max,
-                        "obj": word
-                    })
+        # Google Document AI v1: tokens are usually a flat list on the page
+        # Fallback: if tokens not found, try visual_elements or lines?
+        # Let's hope 'tokens' is available. 
+        # If not, we can use lines -> segments, but tokens is standard for "words".
+        source_items = getattr(page, "tokens", [])
+        
+        for token in source_items:
+            text = _get_text(document, token.layout.text_anchor)
+            if not text.strip():
+                continue
+                
+            # Get center coordinates
+            vertices = token.layout.bounding_poly.normalized_vertices
+            if not vertices:
+                continue
+                
+            y_center = sum(v.y for v in vertices) / len(vertices)
+            x_center = sum(v.x for v in vertices) / len(vertices)
+            x_min = min(v.x for v in vertices)
+            x_max = max(v.x for v in vertices)
+            
+            all_tokens.append({
+                "text": text,
+                "y": y_center,
+                "x": x_center,
+                "x_min": x_min,
+                "x_max": x_max,
+                "obj": token
+            })
 
         # 2️⃣ Group by Rows (Cluster Y coordinates)
         # Sort by Y
