@@ -242,10 +242,10 @@ async def admin_report_detail(report_id: str):
             "product_id": i.get("productId"),
             # 🔥 ASIL DÜZELTME BURADA
             "product_name": i.get("productName"),
-            "quantity": int(i.get("quantity", 0)),
-            "profit": float(i.get("profit", 0)),
-            "cost": float(i.get("cost", 0)),
-            "confidence": float(i.get("confidence", 0)),
+            "quantity": int(i.get("quantity") or 0),
+            "profit": float(i.get("profit") or 0),
+            "cost": float(i.get("cost") or 0),
+            "confidence": float(i.get("confidence") or 0),
         })
 
     return {
