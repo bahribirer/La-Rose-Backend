@@ -195,6 +195,15 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                      doc_tokens.append(DocumentToken(text=t["text"], layout=t["obj"].layout))
                      continue
                 
+            # Create DocumentLineItem
+            doc_tokens = []
+            
+            for t in row:
+                # Always keep barcodes
+                if t["text"].isdigit() and len(t["text"]) == 13:
+                     doc_tokens.append(DocumentToken(text=t["text"], layout=t["obj"].layout))
+                     continue
+                
                 # Filter out numbers that are NOT in valid zones
                 val = _parse_number(t["text"])
                 if val is not None:
@@ -206,8 +215,9 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                             break
                     
                     # If it's a number but NOT in a financial zone, ignore it as token
-                    # (unless we want to keep it as text alias)
-                    pass 
+                    # This prevents "400 ML" -> "400" getting picked up as Quantity
+                    if not in_zone:
+                        continue 
 
                 doc_tokens.append(DocumentToken(
                     text=t["text"],
