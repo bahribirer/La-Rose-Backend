@@ -96,7 +96,6 @@ async def scan_report_bytes(binary: bytes) -> dict:
 
     # ---------- RESPONSE ----------
     # ---------- RESPONSE (MOBILE SAFE) ----------
-    return {
         "scan_id": str(insert_result.inserted_id),
         "items": [
             {
@@ -104,6 +103,12 @@ async def scan_report_bytes(binary: bytes) -> dict:
                 "urun_name": i.urun_name,
                 "miktar": i.miktar,
                 "match_confidence": i.match_confidence,
+
+                # 🔥 FIXED: Send financial data to mobile so it sends it back on save
+                "ecz_kar": i.ecz_kar,
+                "maliyet": i.maliyet,
+                "birim_fiyat": i.birim_fiyat,
+                "tutar": i.tutar,
             }
             for i in items
         ],
