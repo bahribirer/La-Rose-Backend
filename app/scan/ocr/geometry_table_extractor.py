@@ -135,7 +135,27 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             # Create DocumentLineItem
             # Pass tokens so `table_line_parser` can find barcode!
             doc_tokens = []
+            
+            # Smart Token Filter: Exclude "400" (from 400 ML) if it's far left of Qty Zone
+            qty_min_x = 0.0
+            if "qty" in col_zones:
+                qty_min_x = col_zones["qty"][0]
+            
             for t in row:
+                # Always keep barcodes
+                if t["text"].isdigit() and len(t["text"]) == 13:
+                     doc_tokens.append(DocumentToken(text=t["text"], layout=t["obj"].layout))
+                     continue
+                
+                # If it's a number 0-500 (potential qty candidate)
+                val = _parse_number(t["text"])
+                if val is not None and isinstance(val, int) and 0 < val <= 500:
+                    # If we know Qty Zone, and this number is clearly to the LEFT
+                    # (Allow some buffer, e.g. 0.05 left of qty start)
+                    if qty_min_x > 0 and t["x_max"] < (qty_min_x - 0.02):
+                        # SKIP this misleading number (e.g. 400 ML)
+                        continue
+                
                 doc_tokens.append(DocumentToken(
                     text=t["text"],
                     layout=t["obj"].layout
