@@ -1,3 +1,4 @@
+from google.cloud import documentai
 from google.api_core.client_options import ClientOptions
 
 
