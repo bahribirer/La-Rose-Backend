@@ -171,28 +171,33 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 # Check Zones
                 if "qty" in col_zones:
                     if col_zones["qty"][0] <= t_center <= col_zones["qty"][1]:
-                        if isinstance(val, int) or (isinstance(val, float) and val.is_integer()):
+                        if (isinstance(val, int) or (isinstance(val, float) and val.is_integer())) and exact_qty is None:
                              exact_qty = int(val)
                 
                 if "total" in col_zones:
                     if col_zones["total"][0] <= t_center <= col_zones["total"][1]:
-                        exact_total = val
+                        if exact_total is None:
+                            exact_total = val
 
                 if "price" in col_zones:
                     if col_zones["price"][0] <= t_center <= col_zones["price"][1]:
-                        exact_price = val
+                        if exact_price is None:
+                            exact_price = val
 
                 if "profit" in col_zones:
                     if col_zones["profit"][0] <= t_center <= col_zones["profit"][1]:
-                        exact_profit = val
+                        if exact_profit is None:
+                            exact_profit = val
 
                 if "cost" in col_zones:
                     if col_zones["cost"][0] <= t_center <= col_zones["cost"][1]:
-                        exact_cost = val
+                        if exact_cost is None:
+                            exact_cost = val
                         
                 if "stock" in col_zones:
                      if col_zones["stock"][0] <= t_center <= col_zones["stock"][1]:
-                        exact_stock = int(val)
+                        if exact_stock is None:
+                            exact_stock = int(val)
 
 
             # Create DocumentLineItem
