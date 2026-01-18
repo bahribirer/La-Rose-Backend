@@ -46,7 +46,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         all_tokens.sort(key=lambda k: k["y"])
         
         # Stricter tolerance to prevent merging lines
-        Y_TOLERANCE = 0.006 
+        Y_TOLERANCE = 0.010
         
         rows = []
         current_row = []
@@ -68,16 +68,17 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         # 3️⃣ Detect Headers & Define Column Zones (X-Ranges)
         col_zones = {} # "qty": (x_min, x_max), "total": ...
         
-        for row in rows:
+        # Scan first 10 rows for headers (accumulate zones)
+        for i in range(min(len(rows), 10)):
+            row = rows[i]
             row_text = " ".join([t["text"].upper() for t in row])
             
             # Heuristic: Check for Header keywords
-            if "BARKOD" in row_text or "URUN ADI" in row_text or "FIYAT" in row_text:
+            if "BARKOD" in row_text or "URUN ADI" in row_text or "FIYAT" in row_text or "ADET" in row_text:
                 for t in row:
                     txt = t["text"].upper()
                     if "ADET" in txt or "MIKTAR" in txt or "SAT.AD" in txt:
                         if "STOK" not in txt:
-                            # Found Qty Header
                              col_zones["qty"] = (t["x_min"] - 0.02, t["x_max"] + 0.02)
                     
                     if "TUTAR" in txt or "TOPLAM" in txt:
@@ -85,19 +86,21 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                         
                     if "FIYAT" in txt or "BIRIM" in txt:
                          col_zones["price"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
-                
-                # If we found headers, stop scanning
-                if col_zones:
-                    print("📐 GEOMETRIC HEADERS FOUND:", col_zones)
-                    break
         
+        if col_zones:
+             print("📐 GEOMETRIC HEADERS FOUND:", col_zones)
+
         # 4️⃣ Extract Data from Rows using Column Zones
         for row in rows:
             raw_text = " ".join([t["text"] for t in row])
             
-            # Skip header rows or irrelevant text
-            if "TOPLAM" in raw_text.upper() or "SAYFA" in raw_text.upper():
-                continue
+            # Smart Skip: Don't skip if it looks like a Product (has barcode)
+            has_barcode = any(t["text"].isdigit() and len(t["text"]) == 13 for t in row)
+            
+            if not has_barcode:
+                # Only skip if NO barcode is present
+                if "TOPLAM" in raw_text.upper() or "SAYFA" in raw_text.upper():
+                    continue
             
             # Try to extract structured values based on Zones
             exact_qty = None
