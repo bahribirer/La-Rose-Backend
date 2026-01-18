@@ -74,45 +74,31 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         else:
             # We have barcodes. Create a row for each.
             barcodes.sort(key=lambda k: k["y"])
-            
-            # Map barcode ID to a list of tokens
             row_map = {id(b): [b] for b in barcodes}
+            barcode_ys = {id(b): b["y"] for b in barcodes}
             
-            # Define Vertical Slices (Midpoints)
-            slice_boundaries = []
-            for i in range(len(barcodes)):
-                b_curr = barcodes[i]
-                bid = id(b_curr)
-                
-                # Top Boundary
-                if i == 0:
-                    top = 0.0  # Start of page
-                else:
-                    b_prev = barcodes[i-1]
-                    top = (b_prev["y"] + b_curr["y"]) / 2
-                
-                # Bottom Boundary
-                if i == len(barcodes) - 1:
-                    bottom = 1.0 # End of page
-                else:
-                    b_next = barcodes[i+1]
-                    bottom = (b_curr["y"] + b_next["y"]) / 2
-                    
-                slice_boundaries.append((bid, top, bottom))
+            # Calculate dynamic height limit for each barcode (height of the barcode itself)
+            # This allows the robust threshold needed for wavy lines
+            barcode_heights = {}
+            for b in barcodes:
+                h = b["obj"].layout.bounding_poly.normalized_vertices[2].y - b["obj"].layout.bounding_poly.normalized_vertices[0].y
+                barcode_heights[id(b)] = h
 
-            # Assign other tokens to their slice
+            # Assign other tokens to CLOSEST barcode (Nearest Neighbor)
             for t in others:
-                y = t["y"]
-                assigned = False
-                for bid, top, bottom in slice_boundaries:
-                    if top <= y < bottom:
-                        row_map[bid].append(t)
-                        assigned = True
-                        break
+                # Find closest barcode by Center-to-Center distance
+                closest_bid = min(barcode_ys.keys(), key=lambda bid: abs(t["y"] - barcode_ys[bid]))
+                dist = abs(t["y"] - barcode_ys[closest_bid])
                 
-                # Safety fallback
-                if not assigned and slice_boundaries:
-                     pass
+                # Dynamic Threshold: Allow distance up to ~1.2x the Barcode Height
+                # This catches Qty/Price even if slightly misaligned, but rejects next row
+                limit = barcode_heights[closest_bid] * 1.2
+                
+                if dist < limit:
+                    row_map[closest_bid].append(t)
+                else:
+                    # Too far from any barcode -> Noise/Header/Footer
+                    pass
 
             # Convert map to list of rows
             for b in barcodes:
@@ -120,16 +106,12 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 r.sort(key=lambda k: k["x"]) 
                 rows.append(r)
 
-            print(f"🧩 BARCODE SLICING MODE: Created {len(rows)} robust rows via MIDPOINT CUTS.")
+            print(f"🧩 BARCODE NEIGHBOR MODE: Created {len(rows)} robust rows via NEAREST CENTER.")
 
         # 3️⃣ Detect Headers & Define DISJOINT Column Zones
         header_tokens = []
         
-        # 3️⃣ Detect Headers (Scan *ALL* tokens, not just rows, because headers don't have barcodes!)
-        header_tokens = []
-        
-        # We look for header keywords in the Top 30% of the page usually
-        # But scanning all tokens is safer
+        # We look for header keywords in scan of all tokens
         for t in all_tokens:
              txt = t["text"].strip().upper()
              
@@ -153,25 +135,17 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             types_found = {h["type"] for h in header_tokens}
             if "price" not in types_found and "stock" in types_found:
                 stock_idx = next(i for i, h in enumerate(header_tokens) if h["type"] == "stock")
-                # Insert Price as a virtual header left of Stock
                 stock_h = header_tokens[stock_idx]
                 virtual_price = {"type": "price", "x": stock_h["x"] - 0.15, "x_min": stock_h["x_min"] - 0.15, "x_max": stock_h["x_min"] - 0.02}
                 header_tokens.insert(stock_idx, virtual_price)
                 
-            # Create disjoint zones based on midpoints between headers
-            # Start from 0.0 to first header midpoint
-            # Then mid-to-mid
-            # Last header to 1.0
-            
             for i, h in enumerate(header_tokens):
-                # Start boundary
                 if i == 0:
-                    start = max(0.20, h["x_min"] - 0.10) # Don't go all the way to 0.0, leave room for Name (increased safe zone to 0.20)
+                    start = max(0.20, h["x_min"] - 0.10) 
                 else:
                     prev = header_tokens[i-1]
                     start = (prev["x_max"] + h["x_min"]) / 2
                 
-                # End boundary
                 if i == len(header_tokens) - 1:
                     end = 1.0
                 else:
@@ -182,24 +156,20 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 
             print("📐 GEOMETRIC HEADERS FOUND (DISJOINT):", col_zones)
 
-        # 4️⃣ Extract Data from Rows using Column Zones (STRICT MODE)
+        # 4️⃣ Extract Data from Rows using Column Zones (STRICT MODE + WIDEST SCOPE FALLBACK)
         for row in rows:
             raw_text = " ".join([t["text"] for t in row])
             row_upper = raw_text.upper()
 
-            # 🛑 NOISE FILTER: Skip Page No, List Count, Summary Lines
+            # 🛑 NOISE FILTER
             if "SAYFA" in row_upper or "LISTELENEN" in row_upper or "TOPLAM" in row_upper:
                 continue
 
-            # 🔍 BARCODE CHECK: Strict "Product Row" definition
-            # A valid product row MUST have a 13-digit barcode (or at least look like one)
+            # 🔍 BARCODE CHECK
             barcodes = [t for t in row if t["text"].isdigit() and len(t["text"]) == 13]
-            
-            # If NO barcode, it's likely a header, footer, or garbage text line -> SKIP
             if not barcodes:
                 continue
 
-            # Try to extract structured values based on Zones
             exact_qty = None
             exact_total = None
             exact_price = None
@@ -207,41 +177,78 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             exact_cost = None
             exact_stock = None
             
+            unused_numbers = []
+
             for t in row:
                 t_center = t["x"]
                 val = _parse_number(t["text"])
                 if val is None: continue
+                # Skip the barcode itself from being a price/qty
+                if t["text"].isdigit() and len(t["text"]) == 13 and val > 1000000:
+                    continue
+
+                matched_zone = False
                 
-                # Check Zones
+                # Check Zones First
                 if "qty" in col_zones:
                     if col_zones["qty"][0] <= t_center <= col_zones["qty"][1]:
                         if (isinstance(val, int) or (isinstance(val, float) and val.is_integer())) and exact_qty is None:
                              exact_qty = int(val)
+                             matched_zone = True
                 
                 if "total" in col_zones:
                     if col_zones["total"][0] <= t_center <= col_zones["total"][1]:
                         if exact_total is None:
                             exact_total = val
+                            matched_zone = True
 
                 if "price" in col_zones:
                     if col_zones["price"][0] <= t_center <= col_zones["price"][1]:
                         if exact_price is None:
                             exact_price = val
+                            matched_zone = True
 
                 if "profit" in col_zones:
                     if col_zones["profit"][0] <= t_center <= col_zones["profit"][1]:
                         if exact_profit is None:
                             exact_profit = val
+                            matched_zone = True
 
                 if "cost" in col_zones:
                     if col_zones["cost"][0] <= t_center <= col_zones["cost"][1]:
                         if exact_cost is None:
                             exact_cost = val
+                            matched_zone = True
                         
                 if "stock" in col_zones:
                      if col_zones["stock"][0] <= t_center <= col_zones["stock"][1]:
                         if exact_stock is None:
                             exact_stock = int(val)
+                            matched_zone = True
+                
+                if not matched_zone:
+                    unused_numbers.append(val)
+            
+            # 5️⃣ WIDEST SCOPE FALLBACK
+            # if zones failed (e.g. headers missing), blind fill from unused numbers
+            if exact_qty is None:
+                # Try to find a small integer < 500
+                for n in unused_numbers:
+                     if (isinstance(n, int) or n.is_integer()) and n < 500:
+                         exact_qty = int(n)
+                         unused_numbers.remove(n)
+                         break
+            
+            if exact_price is None:
+                # Take the first float remaining (typically Unit Price comes before Total)
+                for n in unused_numbers:
+                    exact_price = n
+                    unused_numbers.remove(n)
+                    break
+            
+            # If we still have numbers, maybe one is total
+            if exact_total is None and unused_numbers:
+                 exact_total = unused_numbers[0] # Next number is likely total
 
 
             # Create DocumentLineItem
