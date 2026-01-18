@@ -206,10 +206,6 @@ async def admin_reports():
 
     items = []
     async for r in cursor:
-        items.append({
-            "id": str(r["_id"]),
-            "name": r.get("name"),
-            "createdAt": r.get("createdAt"),
         summary = r.get("summary", {
             "total_items": 0,
             "total_profit": 0,
