@@ -2,7 +2,7 @@ import re
 from typing import List
 
 PRICE_RE = re.compile(
-    r"\d{1,3}(?:\.\d{3})*,\d{2}|\d{1,3}(?:,\d{3})*\.\d{2}"
+    r"\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?"
 )
 
 def normalize_price(raw: str) -> float:

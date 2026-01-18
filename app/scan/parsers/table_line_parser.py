@@ -2,7 +2,10 @@
 import re
 from app.scan.parsers.barcode_product_parser import BARCODE_RE
 
-PRICE_RE = re.compile(r"\d{1,3}(?:\.\d{3})*,\d{2}")
+# Flex regex: 1.234,56 | 1234.56 | 123.4 | 123
+PRICE_RE = re.compile(
+    r"\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?"
+)
 
 def normalize_tr_price(v: str) -> float:
     return float(v.replace(".", "").replace(",", "."))
