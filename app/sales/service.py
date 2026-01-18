@@ -74,9 +74,17 @@ async def save_scan_report(
 
 
     # ================== SUMMARY ==================
-    total_items = sum(i["miktar"] for i in normalized_items)
-    total_profit = sum(i["ecz_kar"] for i in normalized_items)
-    total_cost = sum(i["maliyet"] * i["miktar"] for i in normalized_items)
+    total_items = sum((i.get("miktar") or 0) for i in normalized_items)
+    
+    total_profit = sum(
+        (i.get("ecz_kar") or 0.0) 
+        for i in normalized_items
+    )
+    
+    total_cost = sum(
+        (i.get("maliyet") or 0.0) * (i.get("miktar") or 0) 
+        for i in normalized_items
+    )
 
     # ================== REPORT NAME ==================
     profile = await db.user_profiles.find_one(
