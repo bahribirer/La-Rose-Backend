@@ -20,6 +20,7 @@ async def get_overview(start: datetime, end: datetime):
                 "total_profit": {"$sum": "$summary.total_profit"},
                 "total_cost": {"$sum": "$summary.total_cost"},
                 "total_items": {"$sum": "$summary.total_items"},
+                "total_sales": {"$sum": "$summary.total_sales"},
             }
         }
     ]
@@ -33,7 +34,7 @@ async def get_overview(start: datetime, end: datetime):
         "total_reports": r.get("total_reports", 0),
         "total_profit": round(r.get("total_profit", 0), 2),
         "total_revenue": round(
-            (r.get("total_profit", 0) + r.get("total_cost", 0)), 2
+            r.get("total_revenue", 0) or r.get("total_sales", 0) or (r.get("total_profit", 0) + r.get("total_cost", 0)), 2
         ),
         "total_items": r.get("total_items", 0),
     }
@@ -56,6 +57,7 @@ async def get_top_users(start: datetime, end: datetime, limit: int = 10):
                 "total_profit": {"$sum": "$summary.total_profit"},
                 "total_cost": {"$sum": "$summary.total_cost"},
                 "total_items": {"$sum": "$summary.total_items"},
+                "total_sales": {"$sum": "$summary.total_sales"},
             }
         },
         {"$sort": {"total_profit": -1}},
@@ -77,7 +79,7 @@ async def get_top_users(start: datetime, end: datetime, limit: int = 10):
             ),
             "total_profit": round(r.get("total_profit", 0), 2),
             "total_revenue": round(
-                (r.get("total_profit", 0) + r.get("total_cost", 0)), 2
+                r.get("total_sales", 0) or (r.get("total_profit", 0) + r.get("total_cost", 0)), 2
             ),
             "total_items": r.get("total_items", 0),
         })
@@ -114,6 +116,12 @@ async def get_top_products(start: datetime, end: datetime, limit: int = 10):
                 "quantity": {"$sum": "$quantity"},
                 "total_profit": {"$sum": "$profit"},
                 "total_cost": {"$sum": "$cost"},
+                # 🔥 NEW: Sum total sales from item price
+                "total_sales": { 
+                    "$sum": { 
+                        "$ifNull": ["$totalPrice", { "$multiply": ["$unitPrice", "$quantity"] }, 0] 
+                    } 
+                }
             }
         },
         {"$sort": {"quantity": -1}},
@@ -122,17 +130,23 @@ async def get_top_products(start: datetime, end: datetime, limit: int = 10):
 
     cursor = db.sales_items.aggregate(pipeline)
 
-    return [
-    {
-        "product_id": (
-            str(r["_id"]["productId"])
-            if r["_id"].get("productId") else None
-        ),
-        "product_name": r["_id"]["productName"],
-        "quantity": int(r.get("quantity", 0)),
-        "total_profit": round(r.get("total_profit", 0), 2),
-        "total_cost": round(r.get("total_cost", 0), 2),
-    }
-    async for r in cursor
-]
+    top_products = [
+        {
+            "product_id": (
+                str(r["_id"]["productId"])
+                if r["_id"].get("productId") else None
+            ),
+            "product_name": r["_id"]["productName"],
+            "quantity": int(r.get("quantity", 0)),
+            "total_profit": round(r.get("total_profit", 0), 2),
+            "total_cost": round(r.get("total_cost", 0), 2),
+            "total_sales": round(r.get("total_sales", 0), 2), # 🔥 Exposed
+        }
+        async for r in cursor
+    ]
+    
+    if top_products:
+        print(f"🚀 TOP PRODUCTS SAMPLE: {top_products[0]}")
+    
+    return top_products
 
