@@ -30,7 +30,7 @@ def normalize_product_total_prices(
     # 🔥 anlamsız küçük değerleri (KDV, oran vs) ayıkla
     candidates = [f for f in floats if f >= 0.01]
 
-    if len(candidates) < 3:
+    if len(candidates) < 1:
         return None, None, None, None, selected_qty
 
     EPS = 0.5  # tolerans
@@ -43,14 +43,15 @@ def normalize_product_total_prices(
     # Genelde: Maliyet + Kar = Tutar
     best_triplet = None
     
-    for a, b, c in itertools.permutations(candidates, 3):
-        if abs((a + b) - c) < EPS:
-            best_triplet = (a, b, c)
-            # Genelde Maliyet > Kar (TR Eczane matematiği)
-            maliyet = max(a, b)
-            ecz_kar = min(a, b)
-            tutar = c
-            break
+    if len(candidates) >= 3:
+        for a, b, c in itertools.permutations(candidates, 3):
+            if abs((a + b) - c) < EPS:
+                best_triplet = (a, b, c)
+                # Genelde Maliyet > Kar (TR Eczane matematiği)
+                maliyet = max(a, b)
+                ecz_kar = min(a, b)
+                tutar = c
+                break
 
     # fallback (çok nadir, tutar=max kabul et)
     if tutar is None:
@@ -81,12 +82,28 @@ def normalize_product_total_prices(
             if match:
                 selected_qty = q
                 break
-        
-        # Eğer hiç match yoksa ve elimizde multiple candidates varsa
-        # Ve eğer "First Integer Rule" ile "Stok" yiyorsak (örn. 8, 1)
-        # Genelde satılan adet küçüktür (ama riskli).
-        # Şimdilik: Match yoksa 'candidate_quantities[0]' (ilk tespit edilen) kullanmaya devam ediyoruz.
-        # Yukardaki loop sadece "Daha iyi bir aday" varsa onu öne çıkarır.
+
+    # 3️⃣ FALLBACK: Eğer Triplet (Maliyet+Kar=Tutar) bulunamadıysa
+    # Ama elimizde Qty ve Tutar adayı varsa, basitleştirilmiş bir match deneyelim.
+    # Qty * UnitPrice = Total
+    if tutar is None and candidate_quantities:
+        for q in candidate_quantities:
+            if q <= 0: continue
+            for total_candidate in candidates:
+                # Toplam buysa, birim fiyat ne olur?
+                calc_unit = total_candidate / q
+                
+                # Listede bu birim fiyat var mı?
+                for f in candidates:
+                    if f == total_candidate: continue
+                    if abs(f - calc_unit) < EPS:
+                        # MATCH FOUND! (Net Satış & Birim Fiyat bulundu)
+                        tutar = total_candidate
+                        selected_qty = q
+                        # Profit/Cost bilinmiyor, 0 kalacak.
+                        break
+                if tutar: break
+            if tutar: break
 
     unit_price = None
     if tutar and selected_qty:

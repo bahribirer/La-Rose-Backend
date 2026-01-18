@@ -24,7 +24,11 @@ def extract_table_items(document) -> List[DocumentLineItem]:
             
             # Check header rows
             rows_to_scan = list(table.header_rows)
-            # If no formal header, maybe first row is header? (Risk: skipping data)
+            
+            # 🔥 FALLBACK: If header missing, check the first body row too
+            if table.body_rows:
+                rows_to_scan.append(table.body_rows[0])
+
             # Let's trust Document AI structure first.
             
             for h_row in rows_to_scan:
