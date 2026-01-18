@@ -87,11 +87,12 @@ def parse_line_based_sales_report(
         ints = [x for x in numbers if isinstance(x, int)]
         floats = [x for x in numbers if isinstance(x, float)]
 
-        # 4️⃣ Miktar: 0 olmayan en büyük int (satılan adet genelde büyük)
+        # 4️⃣ Miktar: İlk pozitif integer (Sıra önemli: Barkod -> Adet -> Fiyat ...)
         qty = 1
         valid_ints = [x for x in ints if x > 0]
         if valid_ints:
-            qty = max(valid_ints)
+            # 🔥 FIX: Take FIRST integer (Sold Qty), ignore subsequent (Stock Qty)
+            qty = valid_ints[0]
 
         # 5️⃣ SEMANTIC PRICE INFERENCE
         unit_price, maliyet, ecz_kar, tutar = normalize_product_total_prices(

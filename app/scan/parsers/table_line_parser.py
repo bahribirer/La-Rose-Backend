@@ -32,8 +32,10 @@ def parse_table_line(item):
         if raw.isdigit():
             val = int(raw)
             if 0 < val <= 500:
-                item.quantity = val
-                print("   🔢 QTY:", val)
+                # 🔥 FIX: Take FIRST integer (Sold Qty), ignore subsequent (Stock Qty)
+                if item.quantity is None:
+                    item.quantity = val
+                    print("   🔢 QTY:", val)
             continue
 
         # fiyat
