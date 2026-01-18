@@ -85,6 +85,12 @@ async def save_scan_report(
         (i.get("maliyet") or 0.0) * (i.get("miktar") or 0) 
         for i in normalized_items
     )
+    
+    # 🔥 NEW: Calculate Gross Sales (Revenue) from Price
+    total_sales = sum(
+        (i.get("tutar") or 0.0) 
+        for i in normalized_items
+    )
 
     # ================== REPORT NAME ==================
     profile = await db.user_profiles.find_one(
@@ -122,6 +128,7 @@ async def save_scan_report(
             "total_items": total_items,
             "total_profit": total_profit,
             "total_cost": total_cost,
+            "total_sales": total_sales, # 🔥 Persist Revenue
         }
     }
 

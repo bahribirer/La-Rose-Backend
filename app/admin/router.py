@@ -214,7 +214,7 @@ async def admin_reports():
         
         # 🔥 FIX: Calculate revenue on the fly if missing
         if "total_revenue" not in summary:
-            summary["total_revenue"] = summary.get("total_profit", 0) + summary.get("total_cost", 0)
+            summary["total_revenue"] = summary.get("total_sales") or (summary.get("total_profit", 0) + summary.get("total_cost", 0))
 
         items.append({
             "id": str(r["_id"]),
@@ -266,7 +266,7 @@ async def admin_report_detail(report_id: str):
     # 🔥 FIX: Admin Panel needs total_revenue (profit + cost)
     summary = report.get("summary", {})
     if "total_revenue" not in summary:
-        summary["total_revenue"] = summary.get("total_profit", 0) + summary.get("total_cost", 0)
+        summary["total_revenue"] = summary.get("total_sales") or (summary.get("total_profit", 0) + summary.get("total_cost", 0))
 
     return {
         "id": str(report["_id"]),
