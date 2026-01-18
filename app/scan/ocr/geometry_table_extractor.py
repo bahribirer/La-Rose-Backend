@@ -76,40 +76,42 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             barcodes.sort(key=lambda k: k["y"])
             row_map = {id(b): [b] for b in barcodes}
             
-            # Pre-calculate Barcode Geometry
-            barcode_geoms = {}
+            # Pre-calculate Barcode Geometry (Vertical Box)
+            barcode_boxes = {}
             for b in barcodes:
                 y_min = b["obj"].layout.bounding_poly.normalized_vertices[0].y
                 y_max = b["obj"].layout.bounding_poly.normalized_vertices[2].y
-                barcode_geoms[id(b)] = (y_min, y_max)
+                # Expand box slightly (tiny buffer 5%) to catch edge-case alignments
+                h = y_max - y_min
+                barcode_boxes[id(b)] = (y_min - h*0.05, y_max + h*0.05)
 
-            # Assign other tokens based on STRICT VERTICAL INTERSECTION
+            # Assign other tokens: CENTER-IN-BOX
             for t in others:
+                # Calculate Token Center
                 t_y_min = t["obj"].layout.bounding_poly.normalized_vertices[0].y
                 t_y_max = t["obj"].layout.bounding_poly.normalized_vertices[2].y
-                t_h = t_y_max - t_y_min
+                t_center = (t_y_min + t_y_max) / 2
                 
                 best_bid = None
-                best_overlap = 0.0
                 
-                for bid, (b_min, b_max) in barcode_geoms.items():
-                    # Intersection of intervals
-                    overlap_amount = min(t_y_max, b_max) - max(t_y_min, b_min)
-                    
-                    if overlap_amount > 0:
-                        # How much of the TOKEN's height is covered by this barcode's band?
-                        # IoH (Intersection over Height)
-                        ratio = overlap_amount / t_h
-                        if ratio > best_overlap:
-                            best_overlap = ratio
+                # Check which barcode box contains this center
+                # In rare case of overlap, pick closest center
+                min_dist_to_center = 999.0
+                
+                for bid, (b_min, b_max) in barcode_boxes.items():
+                    if b_min <= t_center <= b_max:
+                        # It's inside!
+                        b_center = (b_min + b_max) / 2
+                        dist = abs(t_center - b_center)
+                        
+                        if dist < min_dist_to_center:
+                            min_dist_to_center = dist
                             best_bid = bid
                 
-                # STRICT THRESHOLD: Must overlap at least 50% of itself with the barcode row
-                # This prevents a number "floating" between two lines from being picked up
-                if best_bid and best_overlap >= 0.5:
+                if best_bid:
                      row_map[best_bid].append(t)
                 else:
-                    # Token is noise or header/footer
+                    # Token center is outside all barcode boxes -> Noise/Header/Footer
                     pass
 
             # Convert map to list of rows
@@ -118,12 +120,10 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 r.sort(key=lambda k: k["x"]) 
                 rows.append(r)
 
-            print(f"🧩 BARCODE INTERSECTION MODE: Created {len(rows)} robust rows via VERTICAL IoH.")
+            print(f"🧩 BARCODE CENTER-IN-BOX MODE: Created {len(rows)} robust rows.")
 
         # 3️⃣ Detect Headers & Define DISJOINT Column Zones
         header_tokens = []
-        
-        # We look for header keywords in scan of all tokens
         for t in all_tokens:
              txt = t["text"].strip().upper()
              
@@ -150,7 +150,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 stock_h = header_tokens[stock_idx]
                 virtual_price = {"type": "price", "x": stock_h["x"] - 0.15, "x_min": stock_h["x_min"] - 0.15, "x_max": stock_h["x_min"] - 0.02}
                 header_tokens.insert(stock_idx, virtual_price)
-                
+            
             for i, h in enumerate(header_tokens):
                 if i == 0:
                     start = max(0.20, h["x_min"] - 0.10) 
@@ -196,7 +196,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 val = _parse_number(t["text"])
                 if val is None: continue
                 # Skip the barcode itself from being a price/qty
-                if t["text"].isdigit() and len(t["text"]) == 13 and val > 1000000:
+                if t["text"].isdigit() and len(t["text"]) == 13 and val > 10000:
                     continue
 
                 matched_zone = False
@@ -205,8 +205,10 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 if "qty" in col_zones:
                     if col_zones["qty"][0] <= t_center <= col_zones["qty"][1]:
                         if (isinstance(val, int) or (isinstance(val, float) and val.is_integer())) and exact_qty is None:
-                             exact_qty = int(val)
-                             matched_zone = True
+                             # STRICT CAP: Qty > 50 is likely noise or code
+                             if val < 50:
+                                exact_qty = int(val)
+                                matched_zone = True
                 
                 if "total" in col_zones:
                     if col_zones["total"][0] <= t_center <= col_zones["total"][1]:
@@ -242,25 +244,38 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                     unused_numbers.append(val)
             
             # 5️⃣ WIDEST SCOPE FALLBACK
-            # if zones failed (e.g. headers missing), blind fill from unused numbers
+            # If explicit zones failed, use smart inference from unused numbers
+            
+            # Smart Qty: First NEW number that is a small integer (< 50)
             if exact_qty is None:
-                # Try to find a small integer < 500
                 for n in unused_numbers:
-                     if (isinstance(n, int) or n.is_integer()) and n < 500:
+                     if (isinstance(n, int) or n.is_integer()) and n < 50:
                          exact_qty = int(n)
                          unused_numbers.remove(n)
                          break
             
-            if exact_price is None:
-                # Take the first float remaining (typically Unit Price comes before Total)
-                for n in unused_numbers:
-                    exact_price = n
-                    unused_numbers.remove(n)
-                    break
+            # Smart Price/Total Logic
+            # If we have 2 numbers remaining: Smaller is Price, Larger is Total
+            # If we have 1 number remaining: It is Price (system can calculate total later) or Total? 
+            # Usually users care about Unit Price.
             
-            # If we still have numbers, maybe one is total
-            if exact_total is None and unused_numbers:
-                 exact_total = unused_numbers[0] # Next number is likely total
+            floats = [n for n in unused_numbers]
+            floats.sort() # Sort ascending
+            
+            if len(floats) >= 2:
+                # Assuming [Unit Price, Total Price] pattern roughly
+                if exact_price is None:
+                    exact_price = floats[0] # Smallest is price
+                if exact_total is None:
+                    exact_total = floats[-1] # Largest is total (likely)
+            elif len(floats) == 1:
+                if exact_price is None:
+                    exact_price = floats[0]
+            
+            # Sanity Check: If Price > Total (and Qty > 1), swap them
+            if exact_price and exact_total and exact_qty and exact_qty > 1:
+                if exact_price > exact_total:
+                    exact_price, exact_total = exact_total, exact_price
 
 
             # Create DocumentLineItem
