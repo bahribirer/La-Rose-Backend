@@ -264,6 +264,16 @@ async def admin_report_detail(report_id: str):
         "items": items
     }
 
+# 🔥 DEBUG ENDPOINT: PROOF OF DATA
+@router.get("/debug/report-item/{report_id}", dependencies=[Depends(admin_required)])
+async def debug_report_item(report_id: str):
+    item = await db.sales_items.find_one({"report_id": ObjectId(report_id)})
+    if item:
+        item["_id"] = str(item["_id"])
+        item["report_id"] = str(item["report_id"])
+        return item
+    return {"error": "No items found for this report"}
+
 @router.get("/representatives", dependencies=[Depends(admin_required)])
 async def representatives_performance(
     region: Optional[str] = Query(default=None),
