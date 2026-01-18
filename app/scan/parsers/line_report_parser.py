@@ -81,27 +81,34 @@ def parse_line_based_sales_report(
         
         # 3️⃣ Continue scanning subsequent lines until next product
         while i < n:
-            token = lines[i].strip()
+            raw_line = lines[i].strip()
 
             # ✅ footer görünürse ürün bloğunu bitir
-            if is_footer_line(token):
+            if is_footer_line(raw_line):
                 break
 
             # yeni barkod → yeni ürün
-            if normalize_barcode(token):
+            if normalize_barcode(raw_line):
                 break
+            
+            # 🔥 FIX: Tokenize the line! Don't treat "4 157.00" as one token.
+            tokens_in_line = raw_line.split()
+            
+            for token in tokens_in_line:
+                if INT_RE.fullmatch(token) or PRICE_RE.fullmatch(token):
+                    if "," in token:
+                        clean = token.replace(".", "").replace(",", ".")
+                        val = float(clean)
+                    elif "." in token:
+                        val = float(token)
+                    else:
+                        val = int(token)
+                    
+                    # Avoid accidentally adding a barcode-like number
+                    if isinstance(val, int) and val > 1000000000:
+                        continue
 
-            if INT_RE.fullmatch(token) or PRICE_RE.fullmatch(token):
-                if "," in token:
-                    # TR Format: 1.234,56 -> 1234.56 or 123,45 -> 123.45
-                    clean = token.replace(".", "").replace(",", ".")
-                    val = float(clean)
-                elif "." in token:
-                    val = float(token)
-                else:
-                    val = int(token)
-
-                numbers.append(val)
+                    numbers.append(val)
 
             i += 1
 
