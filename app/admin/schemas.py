@@ -23,6 +23,7 @@ class TopProduct(BaseModel):
     quantity: int
     total_profit: float
     total_cost: float
+    total_sales: float = 0.0 # 🔥 EKLENDİ
 
 
 class AdminOverviewResponse(BaseModel):
