@@ -138,8 +138,8 @@ async def save_scan_report(
     "quantity": i["miktar"],
 
     # 🔥 ADMIN
-    "unit_price": i.get("birim_fiyat"),
-    "total_price": i.get("tutar"),
+    "unitPrice": i.get("birim_fiyat"),
+    "totalPrice": i.get("tutar"),
 
     # mevcut
     "profit": i["ecz_kar"],
