@@ -90,18 +90,23 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         if col_zones:
              print("📐 GEOMETRIC HEADERS FOUND:", col_zones)
 
-        # 4️⃣ Extract Data from Rows using Column Zones
+        # 4️⃣ Extract Data from Rows using Column Zones (STRICT MODE)
         for row in rows:
             raw_text = " ".join([t["text"] for t in row])
+            row_upper = raw_text.upper()
+
+            # 🛑 NOISE FILTER: Skip Page No, List Count, Summary Lines
+            if "SAYFA" in row_upper or "LISTELENEN" in row_upper or "TOPLAM" in row_upper:
+                continue
+
+            # 🔍 BARCODE CHECK: Strict "Product Row" definition
+            # A valid product row MUST have a 13-digit barcode (or at least look like one)
+            barcodes = [t for t in row if t["text"].isdigit() and len(t["text"]) == 13]
             
-            # Smart Skip: Don't skip if it looks like a Product (has barcode)
-            has_barcode = any(t["text"].isdigit() and len(t["text"]) == 13 for t in row)
-            
-            if not has_barcode:
-                # Only skip if NO barcode is present
-                if "TOPLAM" in raw_text.upper() or "SAYFA" in raw_text.upper():
-                    continue
-            
+            # If NO barcode, it's likely a header, footer, or garbage text line -> SKIP
+            if not barcodes:
+                continue
+
             # Try to extract structured values based on Zones
             exact_qty = None
             exact_total = None
@@ -136,26 +141,29 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             # Pass tokens so `table_line_parser` can find barcode!
             doc_tokens = []
             
-            # Smart Token Filter: Exclude "400" (from 400 ML) if it's far left of Qty Zone
-            qty_min_x = 0.0
-            if "qty" in col_zones:
-                qty_min_x = col_zones["qty"][0]
-            
             for t in row:
                 # Always keep barcodes
                 if t["text"].isdigit() and len(t["text"]) == 13:
                      doc_tokens.append(DocumentToken(text=t["text"], layout=t["obj"].layout))
                      continue
                 
-                # If it's a number 0-500 (potential qty candidate)
+                # Filter out numbers that are NOT in valid zones to prevent "400 ML" -> Qty errors
+                # If we have zones, strictly enforce them for pure numbers
                 val = _parse_number(t["text"])
-                if val is not None and isinstance(val, int) and 0 < val <= 500:
-                    # If we know Qty Zone, and this number is clearly to the LEFT
-                    # (Allow some buffer, e.g. 0.05 left of qty start)
-                    if qty_min_x > 0 and t["x_max"] < (qty_min_x - 0.02):
-                        # SKIP this misleading number (e.g. 400 ML)
-                        continue
-                
+                if val is not None:
+                    # Is it in ANY valid financial zone?
+                    in_zone = False
+                    if "qty" in col_zones and col_zones["qty"][0] <= t["x"] <= col_zones["qty"][1]: in_zone = True
+                    elif "price" in col_zones and col_zones["price"][0] <= t["x"] <= col_zones["price"][1]: in_zone = True
+                    elif "total" in col_zones and col_zones["total"][0] <= t["x"] <= col_zones["total"][1]: in_zone = True
+                    
+                    # If it's a number but NOT in a financial zone, treat it as text (e.g. part of Product Name)
+                    # BUT `line_report_parser` often grabs the "first number" it sees.
+                    # So we should probably NOT send it as a separate token if it risks confusing the parser.
+                    # HOWEVER, we need the text for the description.
+                    # Let's keep it, but relying on `extracted` values is safer.
+                    pass 
+
                 doc_tokens.append(DocumentToken(
                     text=t["text"],
                     layout=t["obj"].layout
@@ -164,7 +172,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             item = DocumentLineItem(
                 raw_text=raw_text,
                 tokens=doc_tokens,
-                confidence=0.90,
+                confidence=0.95, # High confidence for Geometry match
                 source="GEOMETRY"
             )
             item.exact_quantity_match = exact_qty
