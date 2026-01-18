@@ -142,6 +142,13 @@ def extract_table_items(document) -> List[DocumentLineItem]:
                 if not raw_parts:
                     continue
                 
+                # 🛑 BARCODE MANDATE (STRICT MODE)
+                # Filter out rows that don't have a 13-digit barcode
+                has_barcode = any(token.text.isdigit() and len(token.text) == 13 for token in tokens)
+                if not has_barcode:
+                    # Skip noise lines like headers/footers explicitly
+                    continue
+
                 item = DocumentLineItem(
                     raw_text=" | ".join(raw_parts),
                     tokens=tokens,
