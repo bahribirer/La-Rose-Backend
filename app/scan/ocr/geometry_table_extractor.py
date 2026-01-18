@@ -75,29 +75,54 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             # We have barcodes. Create a row for each.
             barcodes.sort(key=lambda k: k["y"])
             row_map = {id(b): [b] for b in barcodes}
-            barcode_ys = {id(b): b["y"] for b in barcodes}
             
-            # Calculate dynamic height limit for each barcode (height of the barcode itself)
-            # This allows the robust threshold needed for wavy lines
-            barcode_heights = {}
-            for b in barcodes:
-                h = b["obj"].layout.bounding_poly.normalized_vertices[2].y - b["obj"].layout.bounding_poly.normalized_vertices[0].y
-                barcode_heights[id(b)] = h
+            # Calculate dynamic zones for each barcode
+            # We want to claim ~45% of the space up and down, leaving 10% gaps
+            row_zones = {}
+            
+            # Estimate average spacing for edge cases
+            avg_spacing = 0.05 # Default 5%
+            if len(barcodes) > 1:
+                spacings = [barcodes[i+1]["y"] - barcodes[i]["y"] for i in range(len(barcodes)-1)]
+                avg_spacing = sum(spacings) / len(spacings)
 
-            # Assign other tokens to CLOSEST barcode (Nearest Neighbor)
-            for t in others:
-                # Find closest barcode by Center-to-Center distance
-                closest_bid = min(barcode_ys.keys(), key=lambda bid: abs(t["y"] - barcode_ys[bid]))
-                dist = abs(t["y"] - barcode_ys[closest_bid])
+            for i in range(len(barcodes)):
+                b = barcodes[i]
+                bid = id(b)
+                y = b["y"]
                 
-                # Dynamic Threshold: Allow distance up to ~1.2x the Barcode Height
-                # This catches Qty/Price even if slightly misaligned, but rejects next row
-                limit = barcode_heights[closest_bid] * 1.2
-                
-                if dist < limit:
-                    row_map[closest_bid].append(t)
+                # Distance to Previous
+                if i == 0:
+                    delta_prev = avg_spacing
                 else:
-                    # Too far from any barcode -> Noise/Header/Footer
+                    delta_prev = y - barcodes[i-1]["y"]
+                
+                # Distance to Next
+                if i == len(barcodes) - 1:
+                    delta_next = avg_spacing
+                else:
+                    delta_next = barcodes[i+1]["y"] - y
+                
+                # Define Zone: center +/- 45% of spacing
+                # Note: barcodes[i-1].y + 0.55*gap is the same as y - 0.45*gap roughly?
+                # Let's simple use relative boundary from Center
+                top_boundary = y - (delta_prev * 0.45)
+                bottom_boundary = y + (delta_next * 0.45)
+                
+                row_zones[bid] = (top_boundary, bottom_boundary)
+
+            # Assign other tokens to their safe zone
+            for t in others:
+                y = t["y"]
+                assigned = False
+                for bid, (top, bottom) in row_zones.items():
+                    if top <= y <= bottom:
+                        row_map[bid].append(t)
+                        assigned = True
+                        break
+                
+                if not assigned:
+                    # Token is in the "No Man's Land" (Gap) or Header section -> Noise
                     pass
 
             # Convert map to list of rows
@@ -106,7 +131,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 r.sort(key=lambda k: k["x"]) 
                 rows.append(r)
 
-            print(f"🧩 BARCODE NEIGHBOR MODE: Created {len(rows)} robust rows via NEAREST CENTER.")
+            print(f"🧩 BARCODE SAFE SLICING: Created {len(rows)} robust rows via ADAPTIVE ZONES.")
 
         # 3️⃣ Detect Headers & Define DISJOINT Column Zones
         header_tokens = []
