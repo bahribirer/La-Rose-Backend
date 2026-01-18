@@ -139,19 +139,23 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                         exact_price = val
 
             # Create DocumentLineItem
-            # We construct a synthetic one
+            # Pass tokens so `table_line_parser` can find barcode!
+            doc_tokens = []
+            for t in row:
+                doc_tokens.append(DocumentToken(
+                    text=t["text"],
+                    layout=t["obj"].layout
+                ))
+            
             item = DocumentLineItem(
                 raw_text=raw_text,
+                tokens=doc_tokens,
                 confidence=0.90,
                 source="GEOMETRY"
             )
             item.exact_quantity_match = exact_qty
             item.exact_total_match = exact_total
             item.exact_price_match = exact_price
-            
-            # Pass all tokens? or just raw text?
-            # Mapper uses raw text for regex if exact match is missing.
-            # So raw_text is populated.
             
             items.append(item)
 
