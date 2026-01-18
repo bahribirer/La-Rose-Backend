@@ -63,7 +63,9 @@ def extract_table_items(document) -> List[DocumentLineItem]:
                 # If we found at least 2 key columns, stop scanning
                 if sum(1 for v in col_map.values() if v != -1) >= 2:
                     break
-
+            
+            print(f"🔍 DEBUG: Header Scan Complete")
+            # print(f"   Headers Scanned: {[cell._get_text(document, cell.layout.text_anchor) for h in rows_to_scan for cell in h.cells]}") 
             print(f"📊 COLUMN MAP: {col_map}")
 
             for row in table.body_rows:

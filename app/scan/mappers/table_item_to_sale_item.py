@@ -27,6 +27,10 @@ def table_item_to_sale_item(item, product_map):
     sem_profit = item.exact_profit_match
     sem_cost = item.exact_cost_match
     sem_qty = item.exact_quantity_match or (candidates[0] if candidates else 1)
+    
+    print(f"🔍 DEBUG: Mapper Decision for {item.barcode}")
+    print(f"   Candidates: {candidates} (Exact Match: {item.exact_quantity_match})")
+    print(f"   Semantic Values -> Total: {sem_tutar}, Price: {sem_price}, Qty: {sem_qty}")
 
     # If we have robust structure data (Total + Qty are definitive)
     if sem_tutar and sem_qty:
