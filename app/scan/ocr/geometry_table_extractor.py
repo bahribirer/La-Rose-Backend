@@ -45,8 +45,8 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         # Sort by Y
         all_tokens.sort(key=lambda k: k["y"])
         
-        # Stricter tolerance to prevent merging lines
-        Y_TOLERANCE = 0.010
+        # Stricter tolerance to prevent merging lines (reduced from 0.010)
+        Y_TOLERANCE = 0.004
         
         rows = []
         current_row = []
@@ -54,6 +54,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             current_y = all_tokens[0]["y"]
             
             for t in all_tokens:
+                # Use a very strict tolerance for grouping
                 if abs(t["y"] - current_y) < Y_TOLERANCE: 
                     current_row.append(t)
                 else:
