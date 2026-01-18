@@ -49,10 +49,13 @@ async def save_scan_report(
             maliyet = rec.get("maliyet") or 0.0
 
             # Admin alanlarını da kurtar
+            print(f"   🔍 RECOVERY LOOKUP: rec['birim_fiyat']={rec.get('birim_fiyat')}")
             if item.birim_fiyat is None:
                 item.birim_fiyat = rec["birim_fiyat"]
             if item.tutar is None:
                 item.tutar = rec["tutar"]
+            
+            print(f"   ✅ POST-RECOVERY: item.birim_fiyat={item.birim_fiyat}")
 
         ecz_kar = ecz_kar if ecz_kar is not None else 0.0
 
