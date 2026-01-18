@@ -60,12 +60,12 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         
         if not barcodes:
             print("⚠️ NO BARCODES FOUND IN GEOMETRY MODE. FALLING BACK TO BLIND LINE CLUSTERING.")
-            # Fallback to previous logic if no barcodes found (unlikely for product reports)
+            # Fallback to previous logic
             all_tokens.sort(key=lambda k: k["y"])
             if all_tokens:
                  current_row = [all_tokens[0]]
                  for t in all_tokens[1:]:
-                     if (t["y"] - current_row[0]["y"]) < 0.01: # Strict Y
+                     if (t["y"] - current_row[0]["y"]) < 0.01: 
                          current_row.append(t)
                      else:
                          rows.append(current_row)
@@ -73,36 +73,55 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                  rows.append(current_row)
         else:
             # We have barcodes. Create a row for each.
-            # Sort barcodes by Y to be sure of order
             barcodes.sort(key=lambda k: k["y"])
-            
-            # Init rows with just the barcode
             row_map = {id(b): [b] for b in barcodes}
-            barcode_ys = {id(b): b["y"] for b in barcodes}
             
-            # Assign other tokens to closest barcode row
+            # Pre-calculate Barcode Vertical Ranges (y_min, y_max)
+            # Use the actual bounding poly vertices from the object
+            barcode_ranges = {}
+            for b in barcodes:
+                y_min = b["obj"].layout.bounding_poly.normalized_vertices[0].y
+                y_max = b["obj"].layout.bounding_poly.normalized_vertices[2].y
+                # Add a tiny buffer (10% of height) to catch slightly misaligned text
+                h = y_max - y_min
+                barcode_ranges[id(b)] = (y_min - h*0.1, y_max + h*0.1, h)
+
+            # Assign other tokens based on VERTICAL OVERLAP
             for t in others:
-                # Find closest barcode Y
-                closest_bid = min(barcode_ys.keys(), key=lambda bid: abs(t["y"] - barcode_ys[bid]))
-                dist = abs(t["y"] - barcode_ys[closest_bid])
+                # Calculate T's range
+                t_y_min = t["obj"].layout.bounding_poly.normalized_vertices[0].y
+                t_y_max = t["obj"].layout.bounding_poly.normalized_vertices[2].y
                 
-                # Threshold: If token is too far from the barcode Y, it's noise/header/footer
-                # 0.02 is approx 2% of page height. Report lines are usually tight.
-                if dist < 0.025: 
-                    row_map[closest_bid].append(t)
+                best_bid = None
+                best_overlap_ratio = 0.0
+                
+                for bid, (b_min, b_max, b_h) in barcode_ranges.items():
+                    # Calculate Overlap
+                    overlap_amount = min(t_y_max, b_max) - max(t_y_min, b_min)
+                    
+                    if overlap_amount > 0:
+                        # Overlap exists. Calculate ratio relative to the Token's height
+                        # If a token is 100% inside the barcode band, ratio is 1.0
+                        ratio = overlap_amount / (t_y_max - t_y_min)
+                        if ratio > best_overlap_ratio:
+                            best_overlap_ratio = ratio
+                            best_bid = bid
+                
+                # Strict Threshold: Must overlap at least 30% to be considered same row
+                # (Prevents grazing)
+                if best_bid and best_overlap_ratio > 0.3:
+                     row_map[best_bid].append(t)
                 else:
-                    # Token is likely a Header or Footer far from any product
-                    # We can store it for Header Detection if we want, but for now strict mode: drop it
-                    # (Wait, we need Headers to define zones! So we must collect headers differently)
+                    # Token is noise or header/footer
                     pass
 
             # Convert map to list of rows
             for b in barcodes:
                 r = row_map[id(b)]
-                r.sort(key=lambda k: k["x"]) # Sort by X left-to-right
+                r.sort(key=lambda k: k["x"]) 
                 rows.append(r)
 
-            print(f"🧩 BARCODE CLUSTER MODE: Created {len(rows)} robust rows.")
+            print(f"🧩 BARCODE CLUSTER MODE: Created {len(rows)} robust rows via OVERLAP.")
 
         # 3️⃣ Detect Headers & Define DISJOINT Column Zones
         header_tokens = []
