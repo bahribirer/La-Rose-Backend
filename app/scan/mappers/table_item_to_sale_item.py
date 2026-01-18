@@ -92,6 +92,8 @@ def table_item_to_sale_item(item, product_map):
         # mevcut finansal alanlar
         maliyet=maliyet,
         ecz_kar=ecz_kar,
+        
+        stok_miktari=item.exact_stock_match,
 
         match_confidence=1.0,
     )

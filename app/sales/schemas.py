@@ -55,6 +55,13 @@ class SaleItemFromScan(BaseModel):
         alias="confidence"
     )
 
+    stok_miktari: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Rapordaki stok miktarı",
+        alias="stock"
+    )
+
     model_config = {
         "extra": "ignore", 
         "populate_by_name": True,

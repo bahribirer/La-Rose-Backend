@@ -53,12 +53,17 @@ def extract_table_items(document) -> List[DocumentLineItem]:
                          col_map["total"] = col_idx
 
                     # PROFIT (Kar)
-                    if any(x in txt for x in ["KAR", "KÂR", "KAZANÇ"]):
-                         col_map["profit"] = col_idx
+                    if any(x in txt for x in ["KAR", "KÂR", "KAZANÇ", "ECZ"]):
+                        if "ECZANE" not in txt:
+                             col_map["profit"] = col_idx
 
                     # COST (Maliyet)
-                    if any(x in txt for x in ["MALİYET", "MALIYET", "ALIS", "ALIŞ"]):
+                    if any(x in txt for x in ["MALİYET", "MALIYET", "ALIS", "ALIŞ", "GELİŞ", "GELIS"]):
                          col_map["cost"] = col_idx
+
+                    # STOCK (Stok)
+                    if any(x in txt for x in ["STOK", "MEVCUT", "KALAN", "ELDEKİ"]):
+                         col_map["stock"] = col_idx
                 
                 # If we found at least 2 key columns, stop scanning
                 if sum(1 for v in col_map.values() if v != -1) >= 2:
@@ -74,6 +79,8 @@ def extract_table_items(document) -> List[DocumentLineItem]:
                 
                 # Extracted values
                 extracted = {k: None for k in col_map.keys()}
+                # Update extraction map with 'stock' if not present in init
+                if "stock" not in extracted: extracted["stock"] = None
 
                 for col_idx, cell in enumerate(row.cells):
                     cell_text = _get_text(
@@ -105,7 +112,7 @@ def extract_table_items(document) -> List[DocumentLineItem]:
                                         val = float(candidate)
                                     
                                     # Filter weird values
-                                    if key == "qty":
+                                    if key == "qty" or key == "stock":
                                         extracted[key] = int(val)
                                     else:
                                         extracted[key] = val
@@ -155,11 +162,12 @@ def extract_table_items(document) -> List[DocumentLineItem]:
                     source="TABLE",
                     confidence=0.95,
                 )
-                item.exact_quantity_match = extracted["qty"]
-                item.exact_price_match = extracted["price"]
-                item.exact_total_match = extracted["total"]
-                item.exact_profit_match = extracted["profit"]
-                item.exact_cost_match = extracted["cost"]
+                item.exact_quantity_match = extracted.get("qty")
+                item.exact_price_match = extracted.get("price")
+                item.exact_total_match = extracted.get("total")
+                item.exact_profit_match = extracted.get("profit")
+                item.exact_cost_match = extracted.get("cost")
+                item.exact_stock_match = extracted.get("stock")
 
                 items.append(item)
 
