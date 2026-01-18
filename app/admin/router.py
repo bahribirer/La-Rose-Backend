@@ -243,6 +243,11 @@ async def admin_report_detail(report_id: str):
             # 🔥 ASIL DÜZELTME BURADA
             "product_name": i.get("productName"),
             "quantity": int(i.get("quantity") or 0),
+            
+            # 🔥 FIX: Return prices to Admin Panel
+            "unit_price": float(i.get("unitPrice") or i.get("unit_price") or 0),
+            "total_price": float(i.get("totalPrice") or i.get("total_price") or 0),
+            
             "profit": float(i.get("profit") or 0),
             "cost": float(i.get("cost") or 0),
             "confidence": float(i.get("confidence") or 0),
