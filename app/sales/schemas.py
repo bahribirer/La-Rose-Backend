@@ -61,6 +61,12 @@ class SaleItemFromScan(BaseModel):
         "from_attributes": True
     }
 
+    # 🔥 PYDANTIC V1 FALLBACK
+    class Config:
+        allow_population_by_field_name = True
+        extra = "ignore"
+        orm_mode = True 
+
 
 class SaleReportCreateRequest(BaseModel):
     items: List[SaleItemFromScan] = Field(
