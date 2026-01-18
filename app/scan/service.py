@@ -106,6 +106,13 @@ async def scan_report_bytes(binary: bytes) -> dict:
                 "match_confidence": i.match_confidence,
 
                 # 🔥 FIXED: Send financial data to mobile so it sends it back on save
+                # Use camelCase for Frontend/Mobile compatibility
+                "profit": i.ecz_kar,
+                "cost": i.maliyet,
+                "unitPrice": i.birim_fiyat,
+                "totalPrice": i.tutar,
+                
+                # Keep snake_case for backward compatibility
                 "ecz_kar": i.ecz_kar,
                 "maliyet": i.maliyet,
                 "birim_fiyat": i.birim_fiyat,

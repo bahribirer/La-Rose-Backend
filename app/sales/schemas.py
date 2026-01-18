@@ -21,33 +21,38 @@ class SaleItemFromScan(BaseModel):
     birim_fiyat: Optional[float] = Field(
         default=None,
         ge=0,
-        description="Birim satış fiyatı (admin için)"
+        description="Birim satış fiyatı (admin için)",
+        alias="unitPrice"
     )
 
     tutar: Optional[float] = Field(
         default=None,
         ge=0,
-        description="Satış satırı toplam tutarı (admin için)"
+        description="Satış satırı toplam tutarı (admin için)",
+        alias="totalPrice"
     )
 
     # ================= MEVCUT ALANLAR =================
     ecz_kar: Optional[float] = Field(
         default=None,
         ge=0,
-        description="Eczacı karı (negatif olamaz)"
+        description="Eczacı karı (negatif olamaz)",
+        alias="profit"
     )
 
     maliyet: Optional[float] = Field(
         default=None,
         ge=0,
-        description="Birim maliyet (negatif olamaz)"
+        description="Birim maliyet (negatif olamaz)",
+        alias="cost"
     )
 
     match_confidence: Optional[float] = Field(
         default=None,
         ge=0,
         le=1,
-        description="OCR eşleşme güveni (0–1)"
+        description="OCR eşleşme güveni (0–1)",
+        alias="confidence"
     )
 
 
@@ -59,5 +64,7 @@ class SaleReportCreateRequest(BaseModel):
     )
 
     model_config = {
-        "extra": "forbid"
+        "extra": "ignore", # Allow extra fields (safety)
+        "populate_by_name": True, # Allow snake_case input too
+        "from_attributes": True
     }
