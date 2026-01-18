@@ -96,6 +96,7 @@ async def scan_report_bytes(binary: bytes) -> dict:
 
     # ---------- RESPONSE ----------
     # ---------- RESPONSE (MOBILE SAFE) ----------
+    return {
         "scan_id": str(insert_result.inserted_id),
         "items": [
             {
