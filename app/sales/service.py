@@ -148,7 +148,11 @@ async def save_scan_report(
 })
 
 
+
     if docs:
+        print("\n📝 SAVING SALES ITEMS TO DB:")
+        for d in docs:
+            print(f"   💾 Item: {d.get('productId')} -> UnitPrice: {d.get('unitPrice')} | Total: {d.get('totalPrice')}")
         await db.sales_items.insert_many(docs)
 
     return {
