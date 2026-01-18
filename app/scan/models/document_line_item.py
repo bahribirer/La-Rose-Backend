@@ -38,3 +38,5 @@ class DocumentLineItem:
         self.exact_price_match: Optional[float] = None
         self.exact_profit_match: Optional[float] = None
         self.exact_cost_match: Optional[float] = None
+        self.exact_stock_match: Optional[int] = None
+

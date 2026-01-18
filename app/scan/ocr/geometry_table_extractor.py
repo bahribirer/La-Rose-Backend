@@ -66,7 +66,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 _finalize_row(rows, current_row)
 
         # 3️⃣ Detect Headers & Define Column Zones (X-Ranges)
-        col_zones = {} # "qty": (x_min, x_max), "total": ...
+        col_zones = {} 
         
         # Scan first 10 rows for headers (accumulate zones)
         for i in range(min(len(rows), 10)):
@@ -74,18 +74,38 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             row_text = " ".join([t["text"].upper() for t in row])
             
             # Heuristic: Check for Header keywords
-            if "BARKOD" in row_text or "URUN ADI" in row_text or "FIYAT" in row_text or "ADET" in row_text:
+            # We look for ANY known header to trigger a scan of the line
+            if any(k in row_text for k in ["BARKOD", "URUN", "FIYAT", "ADET", "MALIYET", "KAR", "STOK"]):
                 for t in row:
                     txt = t["text"].upper()
+                    
+                    # QTY Zone
                     if "ADET" in txt or "MIKTAR" in txt or "SAT.AD" in txt:
                         if "STOK" not in txt:
                              col_zones["qty"] = (t["x_min"] - 0.02, t["x_max"] + 0.02)
                     
+                    # TOTAL Zone
                     if "TUTAR" in txt or "TOPLAM" in txt:
                         col_zones["total"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
                         
+                    # PRICE Zone
                     if "FIYAT" in txt or "BIRIM" in txt:
                          col_zones["price"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
+
+                    # PROFIT Zone (New!)
+                    if "KAR" in txt or "KÂR" in txt or "KAZANÇ" in txt or "ECZ" in txt: 
+                        # catch "ECZ.KAR" or "ECZ KÂR"
+                        # But be careful not to catch "ECZANE"
+                        if "ECZANE" not in txt:
+                            col_zones["profit"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
+
+                    # COST Zone (New!)
+                    if "MALIYET" in txt or "MALİYET" in txt or "ALIŞ" in txt or "ALIS" in txt or "GELİŞ" in txt or "GELIS" in txt:
+                        col_zones["cost"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
+
+                    # STOCK Zone (New!)
+                    if "STOK" in txt or "MEVCUT" in txt or "KALAN" in txt or "ELDEKİ" in txt:
+                        col_zones["stock"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
         
         if col_zones:
              print("📐 GEOMETRIC HEADERS FOUND:", col_zones)
@@ -111,34 +131,42 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             exact_qty = None
             exact_total = None
             exact_price = None
+            exact_profit = None
+            exact_cost = None
+            exact_stock = None
             
             for t in row:
                 t_center = t["x"]
                 val = _parse_number(t["text"])
                 if val is None: continue
                 
-                # Check Qty Zone
+                # Check Zones
                 if "qty" in col_zones:
-                    z_min, z_max = col_zones["qty"]
-                    if z_min <= t_center <= z_max:
-                        # Ensure it's integer-ish
+                    if col_zones["qty"][0] <= t_center <= col_zones["qty"][1]:
                         if isinstance(val, int) or (isinstance(val, float) and val.is_integer()):
                              exact_qty = int(val)
                 
-                # Check Total Zone
                 if "total" in col_zones:
-                    z_min, z_max = col_zones["total"]
-                    if z_min <= t_center <= z_max:
+                    if col_zones["total"][0] <= t_center <= col_zones["total"][1]:
                         exact_total = val
 
-                # Check Price Zone
                 if "price" in col_zones:
-                    z_min, z_max = col_zones["price"]
-                    if z_min <= t_center <= z_max:
+                    if col_zones["price"][0] <= t_center <= col_zones["price"][1]:
                         exact_price = val
 
+                if "profit" in col_zones:
+                    if col_zones["profit"][0] <= t_center <= col_zones["profit"][1]:
+                        exact_profit = val
+
+                if "cost" in col_zones:
+                    if col_zones["cost"][0] <= t_center <= col_zones["cost"][1]:
+                        exact_cost = val
+                        
+                if "stock" in col_zones:
+                     if col_zones["stock"][0] <= t_center <= col_zones["stock"][1]:
+                        exact_stock = int(val)
+
             # Create DocumentLineItem
-            # Pass tokens so `table_line_parser` can find barcode!
             doc_tokens = []
             
             for t in row:
@@ -147,21 +175,18 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                      doc_tokens.append(DocumentToken(text=t["text"], layout=t["obj"].layout))
                      continue
                 
-                # Filter out numbers that are NOT in valid zones to prevent "400 ML" -> Qty errors
-                # If we have zones, strictly enforce them for pure numbers
+                # Filter out numbers that are NOT in valid zones
                 val = _parse_number(t["text"])
                 if val is not None:
                     # Is it in ANY valid financial zone?
                     in_zone = False
-                    if "qty" in col_zones and col_zones["qty"][0] <= t["x"] <= col_zones["qty"][1]: in_zone = True
-                    elif "price" in col_zones and col_zones["price"][0] <= t["x"] <= col_zones["price"][1]: in_zone = True
-                    elif "total" in col_zones and col_zones["total"][0] <= t["x"] <= col_zones["total"][1]: in_zone = True
+                    for z_type, (z_min, z_max) in col_zones.items():
+                        if z_min <= t["x"] <= z_max:
+                            in_zone = True
+                            break
                     
-                    # If it's a number but NOT in a financial zone, treat it as text (e.g. part of Product Name)
-                    # BUT `line_report_parser` often grabs the "first number" it sees.
-                    # So we should probably NOT send it as a separate token if it risks confusing the parser.
-                    # HOWEVER, we need the text for the description.
-                    # Let's keep it, but relying on `extracted` values is safer.
+                    # If it's a number but NOT in a financial zone, ignore it as token
+                    # (unless we want to keep it as text alias)
                     pass 
 
                 doc_tokens.append(DocumentToken(
@@ -178,6 +203,9 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             item.exact_quantity_match = exact_qty
             item.exact_total_match = exact_total
             item.exact_price_match = exact_price
+            item.exact_profit_match = exact_profit
+            item.exact_cost_match = exact_cost
+            item.exact_stock_match = exact_stock
             
             items.append(item)
 
