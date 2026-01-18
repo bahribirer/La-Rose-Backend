@@ -15,10 +15,6 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
     for page in document.pages:
         # 1️⃣ Collect all tokens with their geometry
         all_tokens = []
-        # Google Document AI v1: tokens are usually a flat list on the page
-        # Fallback: if tokens not found, try visual_elements or lines?
-        # Let's hope 'tokens' is available. 
-        # If not, we can use lines -> segments, but tokens is standard for "words".
         source_items = getattr(page, "tokens", [])
         
         for token in source_items:
@@ -69,56 +65,6 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             if current_row:
                 _finalize_row(rows, current_row)
 
-def _finalize_row(rows, current_row):
-    """
-    Checks if a row contains multiple barcodes. If so, splits it.
-    Otherwise appends to rows.
-    """
-    if not current_row:
-        return
-
-    # Sort by X to check content
-    current_row.sort(key=lambda k: k["x"])
-    
-    # Check for multiple barcodes
-    barcodes = []
-    for t in current_row:
-        # Simple barcode check (13 digits usually)
-        if t["text"].isdigit() and len(t["text"]) == 13:
-             barcodes.append(t)
-    
-    if len(barcodes) > 1:
-        print(f"⚠️ MERGED ROW DETECTED ({len(barcodes)} barcodes). Splitting...")
-        # Split logic: Assign tokens to the closest barcode's Y "plane"
-        # This is a sub-clustering problem.
-        # Let's verify if their Y's are actually distinct enough to split
-        barcodes.sort(key=lambda k: k["y"])
-        
-        # Create sub-rows based on barcode Ys
-        sub_rows = {id(b): [b] for b in barcodes}
-        barcode_ys = {id(b): b["y"] for b in barcodes}
-        
-        for t in current_row:
-            # Skip the barcodes themselves (already added)
-            if any(t["obj"] == b["obj"] for b in barcodes):
-                continue
-                
-            # Find closest barcode Y
-            closest_bid = min(barcode_ys.keys(), key=lambda bid: abs(t["y"] - barcode_ys[bid]))
-            
-            # Or closest barcode Y that is decently close?
-            # If t["y"] is way off, maybe it's garbage?
-            # For now, assign to closest.
-            sub_rows[closest_bid].append(t)
-            
-        # Add the split rows
-        for b in barcodes:
-            r = sub_rows[id(b)]
-            r.sort(key=lambda k: k["x"])
-            rows.append(r)
-    else:
-        rows.append(current_row)
-
         # 3️⃣ Detect Headers & Define Column Zones (X-Ranges)
         col_zones = {} # "qty": (x_min, x_max), "total": ...
         
@@ -152,10 +98,6 @@ def _finalize_row(rows, current_row):
             # Skip header rows or irrelevant text
             if "TOPLAM" in raw_text.upper() or "SAYFA" in raw_text.upper():
                 continue
-            
-            # Identify Barcode (start of a product line)
-            # Simple check: First or second token looks like barcode
-            # Or just store everything and let the mapper filter by barcode later.
             
             # Try to extract structured values based on Zones
             exact_qty = None
@@ -209,6 +151,54 @@ def _finalize_row(rows, current_row):
             items.append(item)
 
     return items
+
+
+def _finalize_row(rows, current_row):
+    """
+    Checks if a row contains multiple barcodes. If so, splits it.
+    Otherwise appends to rows.
+    """
+    if not current_row:
+        return
+
+    # Sort by X to check content
+    current_row.sort(key=lambda k: k["x"])
+    
+    # Check for multiple barcodes
+    barcodes = []
+    for t in current_row:
+        # Simple barcode check (13 digits usually)
+        if t["text"].isdigit() and len(t["text"]) == 13:
+             barcodes.append(t)
+    
+    if len(barcodes) > 1:
+        print(f"⚠️ MERGED ROW DETECTED ({len(barcodes)} barcodes). Splitting...")
+        # Split logic: Assign tokens to the closest barcode's Y "plane"
+        # This is a sub-clustering problem.
+        # Let's verify if their Y's are actually distinct enough to split
+        barcodes.sort(key=lambda k: k["y"])
+        
+        # Create sub-rows based on barcode Ys
+        sub_rows = {id(b): [b] for b in barcodes}
+        barcode_ys = {id(b): b["y"] for b in barcodes}
+        
+        for t in current_row:
+            # Skip the barcodes themselves (already added)
+            if any(t["obj"] == b["obj"] for b in barcodes):
+                continue
+                
+            # Find closest barcode Y
+            closest_bid = min(barcode_ys.keys(), key=lambda bid: abs(t["y"] - barcode_ys[bid]))
+            
+            sub_rows[closest_bid].append(t)
+            
+        # Add the split rows
+        for b in barcodes:
+            r = sub_rows[id(b)]
+            r.sort(key=lambda k: k["x"])
+            rows.append(r)
+    else:
+        rows.append(current_row)
 
 
 def _parse_number(text: str):
