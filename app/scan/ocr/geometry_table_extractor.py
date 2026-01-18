@@ -114,7 +114,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             for i, h in enumerate(header_tokens):
                 # Start boundary
                 if i == 0:
-                    start = 0.0
+                    start = max(0.0, h["x_min"] - 0.10) # Don't go all the way to 0.0, leave room for Name
                 else:
                     prev = header_tokens[i-1]
                     start = (prev["x_max"] + h["x_min"]) / 2
@@ -186,15 +186,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                      if col_zones["stock"][0] <= t_center <= col_zones["stock"][1]:
                         exact_stock = int(val)
 
-            # Create DocumentLineItem
-            doc_tokens = []
-            
-            for t in row:
-                # Always keep barcodes
-                if t["text"].isdigit() and len(t["text"]) == 13:
-                     doc_tokens.append(DocumentToken(text=t["text"], layout=t["obj"].layout))
-                     continue
-                
+
             # Create DocumentLineItem
             doc_tokens = []
             
