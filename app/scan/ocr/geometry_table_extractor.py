@@ -76,53 +76,40 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             barcodes.sort(key=lambda k: k["y"])
             row_map = {id(b): [b] for b in barcodes}
             
-            # Calculate dynamic zones for each barcode
-            # We want to claim ~45% of the space up and down, leaving 10% gaps
-            row_zones = {}
-            
-            # Estimate average spacing for edge cases
-            avg_spacing = 0.05 # Default 5%
-            if len(barcodes) > 1:
-                spacings = [barcodes[i+1]["y"] - barcodes[i]["y"] for i in range(len(barcodes)-1)]
-                avg_spacing = sum(spacings) / len(spacings)
+            # Pre-calculate Barcode Geometry
+            barcode_geoms = {}
+            for b in barcodes:
+                y_min = b["obj"].layout.bounding_poly.normalized_vertices[0].y
+                y_max = b["obj"].layout.bounding_poly.normalized_vertices[2].y
+                barcode_geoms[id(b)] = (y_min, y_max)
 
-            for i in range(len(barcodes)):
-                b = barcodes[i]
-                bid = id(b)
-                y = b["y"]
-                
-                # Distance to Previous
-                if i == 0:
-                    delta_prev = avg_spacing
-                else:
-                    delta_prev = y - barcodes[i-1]["y"]
-                
-                # Distance to Next
-                if i == len(barcodes) - 1:
-                    delta_next = avg_spacing
-                else:
-                    delta_next = barcodes[i+1]["y"] - y
-                
-                # Define Zone: center +/- 45% of spacing
-                # Note: barcodes[i-1].y + 0.55*gap is the same as y - 0.45*gap roughly?
-                # Let's simple use relative boundary from Center
-                top_boundary = y - (delta_prev * 0.45)
-                bottom_boundary = y + (delta_next * 0.45)
-                
-                row_zones[bid] = (top_boundary, bottom_boundary)
-
-            # Assign other tokens to their safe zone
+            # Assign other tokens based on STRICT VERTICAL INTERSECTION
             for t in others:
-                y = t["y"]
-                assigned = False
-                for bid, (top, bottom) in row_zones.items():
-                    if top <= y <= bottom:
-                        row_map[bid].append(t)
-                        assigned = True
-                        break
+                t_y_min = t["obj"].layout.bounding_poly.normalized_vertices[0].y
+                t_y_max = t["obj"].layout.bounding_poly.normalized_vertices[2].y
+                t_h = t_y_max - t_y_min
                 
-                if not assigned:
-                    # Token is in the "No Man's Land" (Gap) or Header section -> Noise
+                best_bid = None
+                best_overlap = 0.0
+                
+                for bid, (b_min, b_max) in barcode_geoms.items():
+                    # Intersection of intervals
+                    overlap_amount = min(t_y_max, b_max) - max(t_y_min, b_min)
+                    
+                    if overlap_amount > 0:
+                        # How much of the TOKEN's height is covered by this barcode's band?
+                        # IoH (Intersection over Height)
+                        ratio = overlap_amount / t_h
+                        if ratio > best_overlap:
+                            best_overlap = ratio
+                            best_bid = bid
+                
+                # STRICT THRESHOLD: Must overlap at least 50% of itself with the barcode row
+                # This prevents a number "floating" between two lines from being picked up
+                if best_bid and best_overlap >= 0.5:
+                     row_map[best_bid].append(t)
+                else:
+                    # Token is noise or header/footer
                     pass
 
             # Convert map to list of rows
@@ -131,7 +118,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 r.sort(key=lambda k: k["x"]) 
                 rows.append(r)
 
-            print(f"🧩 BARCODE SAFE SLICING: Created {len(rows)} robust rows via ADAPTIVE ZONES.")
+            print(f"🧩 BARCODE INTERSECTION MODE: Created {len(rows)} robust rows via VERTICAL IoH.")
 
         # 3️⃣ Detect Headers & Define DISJOINT Column Zones
         header_tokens = []
