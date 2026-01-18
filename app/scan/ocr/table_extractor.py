@@ -7,7 +7,7 @@ from app.scan.models.document_line_item import (
 )
 
 TOKEN_RE = re.compile(
-    r"\d{1,3}(?:\.\d{3})*,\d{2}|\b\d{1,2}\b"
+    r"\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\b\d{1,2}\b"
 )
 
 
