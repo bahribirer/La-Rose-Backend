@@ -41,22 +41,17 @@ class ProductTotalStrategy(ReportStrategy):
             print(f"📊 TABLE ITEMS FOUND (OCR): {len(table_items)}")
 
         # ==================================================
-        # 2️⃣ TABLE MODE – LAYOUT PARSER (FALLBACK)
+        # 2️⃣ GEOMETRY MODE (MANUAL RECONSTRUCTION)
         # ==================================================
-        if not table_items and table_hint:
-            print("🧪 TRYING LAYOUT PARSER")
-
-            file_path = getattr(document, "file_path", None)
-            if file_path:
-                layout_doc = read_with_layout_parser(file_path)
-                table_items = extract_table_items(layout_doc)
-
-                if table_items:
-                    print(
-                        f"📊 TABLE ITEMS FOUND (LAYOUT): "
-                        f"{len(table_items)}"
-                    )
-
+        if not table_items:
+            print("🧪 TRYING GEOMETRY TABLE EXTRACTOR")
+            from app.scan.ocr.geometry_table_extractor import extract_items_by_geometry
+            
+            geo_items = extract_items_by_geometry(document)
+            if geo_items:
+                print(f"📊 GEOMETRY ITEMS FOUND: {len(geo_items)}")
+                table_items = geo_items
+                
         # ==================================================
         # 3️⃣ TABLE MODE SUCCESS
         # ==================================================
