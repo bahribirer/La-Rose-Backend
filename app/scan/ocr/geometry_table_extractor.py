@@ -74,46 +74,45 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         else:
             # We have barcodes. Create a row for each.
             barcodes.sort(key=lambda k: k["y"])
+            
+            # Map barcode ID to a list of tokens
             row_map = {id(b): [b] for b in barcodes}
             
-            # Pre-calculate Barcode Vertical Ranges (y_min, y_max)
-            # Use the actual bounding poly vertices from the object
-            barcode_ranges = {}
-            for b in barcodes:
-                y_min = b["obj"].layout.bounding_poly.normalized_vertices[0].y
-                y_max = b["obj"].layout.bounding_poly.normalized_vertices[2].y
-                # Add a tiny buffer (10% of height) to catch slightly misaligned text
-                h = y_max - y_min
-                barcode_ranges[id(b)] = (y_min - h*0.1, y_max + h*0.1, h)
-
-            # Assign other tokens based on VERTICAL OVERLAP
-            for t in others:
-                # Calculate T's range
-                t_y_min = t["obj"].layout.bounding_poly.normalized_vertices[0].y
-                t_y_max = t["obj"].layout.bounding_poly.normalized_vertices[2].y
+            # Define Vertical Slices (Midpoints)
+            slice_boundaries = []
+            for i in range(len(barcodes)):
+                b_curr = barcodes[i]
+                bid = id(b_curr)
                 
-                best_bid = None
-                best_overlap_ratio = 0.0
-                
-                for bid, (b_min, b_max, b_h) in barcode_ranges.items():
-                    # Calculate Overlap
-                    overlap_amount = min(t_y_max, b_max) - max(t_y_min, b_min)
-                    
-                    if overlap_amount > 0:
-                        # Overlap exists. Calculate ratio relative to the Token's height
-                        # If a token is 100% inside the barcode band, ratio is 1.0
-                        ratio = overlap_amount / (t_y_max - t_y_min)
-                        if ratio > best_overlap_ratio:
-                            best_overlap_ratio = ratio
-                            best_bid = bid
-                
-                # Strict Threshold: Must overlap at least 30% to be considered same row
-                # (Prevents grazing)
-                if best_bid and best_overlap_ratio > 0.3:
-                     row_map[best_bid].append(t)
+                # Top Boundary
+                if i == 0:
+                    top = 0.0  # Start of page
                 else:
-                    # Token is noise or header/footer
-                    pass
+                    b_prev = barcodes[i-1]
+                    top = (b_prev["y"] + b_curr["y"]) / 2
+                
+                # Bottom Boundary
+                if i == len(barcodes) - 1:
+                    bottom = 1.0 # End of page
+                else:
+                    b_next = barcodes[i+1]
+                    bottom = (b_curr["y"] + b_next["y"]) / 2
+                    
+                slice_boundaries.append((bid, top, bottom))
+
+            # Assign other tokens to their slice
+            for t in others:
+                y = t["y"]
+                assigned = False
+                for bid, top, bottom in slice_boundaries:
+                    if top <= y < bottom:
+                        row_map[bid].append(t)
+                        assigned = True
+                        break
+                
+                # Safety fallback
+                if not assigned and slice_boundaries:
+                     pass
 
             # Convert map to list of rows
             for b in barcodes:
@@ -121,7 +120,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 r.sort(key=lambda k: k["x"]) 
                 rows.append(r)
 
-            print(f"🧩 BARCODE CLUSTER MODE: Created {len(rows)} robust rows via OVERLAP.")
+            print(f"🧩 BARCODE SLICING MODE: Created {len(rows)} robust rows via MIDPOINT CUTS.")
 
         # 3️⃣ Detect Headers & Define DISJOINT Column Zones
         header_tokens = []
