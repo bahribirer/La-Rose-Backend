@@ -20,7 +20,8 @@ def normalize_product_total_prices(
         return None, None, None, None
 
     # 🔥 anlamsız küçük değerleri (KDV, oran vs) ayıkla
-    candidates = [f for f in floats if f >= 10]
+    # ARTIK < 10 filtrelemiyoruz, çünkü profit küçük olabilir (örn. 5.00 TL)
+    candidates = [f for f in floats if f >= 0.01]
 
     if len(candidates) < 3:
         return None, None, None, None
@@ -34,8 +35,9 @@ def normalize_product_total_prices(
     # 🔑 TEMEL KURAL: a + b ≈ c
     for a, b, c in itertools.permutations(candidates, 3):
         if abs((a + b) - c) < EPS:
-            maliyet = min(a, b)
-            ecz_kar = max(a, b)
+            # Genelde Maliyet > Kar (TR Eczane matematiği)
+            maliyet = max(a, b)
+            ecz_kar = min(a, b)
             tutar = c
             break
 

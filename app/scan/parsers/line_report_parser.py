@@ -71,7 +71,9 @@ def parse_line_based_sales_report(
 
             if INT_RE.fullmatch(token) or PRICE_RE.fullmatch(token):
                 if "," in token:
-                    val = float(token.replace(",", ""))
+                    # TR Format: 1.234,56 -> 1234.56 or 123,45 -> 123.45
+                    clean = token.replace(".", "").replace(",", ".")
+                    val = float(clean)
                 elif "." in token:
                     val = float(token)
                 else:
