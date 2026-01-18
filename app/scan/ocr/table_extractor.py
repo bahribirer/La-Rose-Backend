@@ -19,37 +19,59 @@ def extract_table_items(document) -> List[DocumentLineItem]:
         print(f"TABLE COUNT (page {page_idx}):", len(page.tables))
 
         for table in page.tables:
-            # 1️⃣ HEADER ANALYSIS
-            qty_col_idx = -1
+            # 1️⃣ SEMANTIC HEADER ANALYSIS
+            col_map = {
+                "qty": -1,
+                "price": -1,
+                "total": -1,
+                "profit": -1,
+                "cost": -1
+            }
             
             # Check header rows
             rows_to_scan = list(table.header_rows)
-            
-            # 🔥 FALLBACK: If header missing, check the first body row too
             if table.body_rows:
                 rows_to_scan.append(table.body_rows[0])
-
-            # Let's trust Document AI structure first.
             
             for h_row in rows_to_scan:
                 for col_idx, cell in enumerate(h_row.cells):
                     txt = _get_text(document, cell.layout.text_anchor).upper()
-                    # Keywords for Sold Quantity
+                    
+                    # QTY
                     if any(x in txt for x in ["ADET", "MİKTAR", "SATILAN", "SAT.AD"]):
-                        # Avoid "STOK ADET" or "KDV ADET"
-                        if "STOK" in txt or "MEVCUT" in txt:
-                            continue
-                        qty_col_idx = col_idx
-                        print(f"🎯 FOUND QTY COLUMN at index {col_idx}: {txt}")
-                        break
-                if qty_col_idx != -1:
+                        if "STOK" not in txt and "MEVCUT" not in txt:
+                            col_map["qty"] = col_idx
+
+                    # PRICE (Birim Fiyat)
+                    if any(x in txt for x in ["FİYAT", "FIYAT", "BİRİM", "BIRIM"]):
+                        if "TOPLAM" not in txt and "TUTAR" not in txt:
+                             col_map["price"] = col_idx
+
+                    # TOTAL (Tutar)
+                    if any(x in txt for x in ["TUTAR", "TOPLAM", "NET SATIŞ", "CİRO"]):
+                        # Avoid "KDV TUTAR" or "ISK TUTAR" logic if simplified
+                         col_map["total"] = col_idx
+
+                    # PROFIT (Kar)
+                    if any(x in txt for x in ["KAR", "KÂR", "KAZANÇ"]):
+                         col_map["profit"] = col_idx
+
+                    # COST (Maliyet)
+                    if any(x in txt for x in ["MALİYET", "MALIYET", "ALIS", "ALIŞ"]):
+                         col_map["cost"] = col_idx
+                
+                # If we found at least 2 key columns, stop scanning
+                if sum(1 for v in col_map.values() if v != -1) >= 2:
                     break
+
+            print(f"📊 COLUMN MAP: {col_map}")
 
             for row in table.body_rows:
                 raw_parts: List[str] = []
                 tokens: List[DocumentToken] = []
                 
-                exact_qty = None
+                # Extracted values
+                extracted = {k: None for k in col_map.keys()}
 
                 for col_idx, cell in enumerate(row.cells):
                     cell_text = _get_text(
@@ -59,23 +81,34 @@ def extract_table_items(document) -> List[DocumentLineItem]:
 
                     if not cell_text:
                         continue
-
+                    
                     cell_text = cell_text.strip()
                     raw_parts.append(cell_text)
                     
                     # 2️⃣ EXACT COLUMN EXTRACTION
-                    if col_idx == qty_col_idx:
-                        # Try to extract integer from this specific cell
-                        # Sometimes cell has "1 Adet" or "1"
-                        nums = re.findall(r"\b\d+\b", cell_text)
-                        if nums:
-                            try:
-                                val = int(nums[0]) # First int in the strictly identified column
-                                if 0 < val < 1000:
-                                    exact_qty = val
-                                    print(f"   🎯 EXACT QTY DETECTED: {val} (from Col {col_idx})")
-                            except:
-                                pass
+                    for key, target_idx in col_map.items():
+                        if col_idx == target_idx:
+                            # Clean and parse number
+                            # Handles "1.234,56", "1234.56", "1"
+                            # Simple regex for number finding
+                            nums = re.findall(r"[\d.,]+", cell_text)
+                            if nums:
+                                # Try parsing the longest candidate as the value
+                                candidate = max(nums, key=len)
+                                try:
+                                    # Normalize TR Format
+                                    if "," in candidate:
+                                        val = float(candidate.replace(".", "").replace(",", "."))
+                                    else:
+                                        val = float(candidate)
+                                    
+                                    # Filter weird values
+                                    if key == "qty":
+                                        extracted[key] = int(val)
+                                    else:
+                                        extracted[key] = val
+                                except:
+                                    pass
 
                     verts = cell.layout.bounding_poly.normalized_vertices
                     xs = [v.x for v in verts if v.x is not None]
@@ -113,7 +146,12 @@ def extract_table_items(document) -> List[DocumentLineItem]:
                     source="TABLE",
                     confidence=0.95,
                 )
-                item.exact_quantity_match = exact_qty
+                item.exact_quantity_match = extracted["qty"]
+                item.exact_price_match = extracted["price"]
+                item.exact_total_match = extracted["total"]
+                item.exact_profit_match = extracted["profit"]
+                item.exact_cost_match = extracted["cost"]
+
                 items.append(item)
 
     return items

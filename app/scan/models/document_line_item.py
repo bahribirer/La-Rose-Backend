@@ -30,5 +30,11 @@ class DocumentLineItem:
         self.maliyet: Optional[float] = None
         
         # 🔥 SMART TABLE PARSING
-        self.quantity_candidates: List[int] = []  # All integers in row
-        self.exact_quantity_match: Optional[int] = None  # From specific column
+        self.quantity_candidates: List[int] = []
+        self.exact_quantity_match: Optional[int] = None
+        
+        # 🧠 Full Semantic Column Mapping
+        self.exact_total_match: Optional[float] = None
+        self.exact_price_match: Optional[float] = None
+        self.exact_profit_match: Optional[float] = None
+        self.exact_cost_match: Optional[float] = None

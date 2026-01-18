@@ -12,18 +12,40 @@ def table_item_to_sale_item(item, product_map):
     if not product:
         return None
 
-    # 🔥 STRUCTURAL PRIORITY
+    # 🔥 STRUCTURAL PRIORITY (Full Semantic Mapping)
+    
+    # 1. Quantity Check
     candidates = item.quantity_candidates
     if item.exact_quantity_match:
-        # If we found a quantity in the specific "Adet" column, prioritize it!
-        # But verify it with Smart Math logic inside normalizer.
         candidates = [item.exact_quantity_match] + [c for c in candidates if c != item.exact_quantity_match]
 
-    # 🔥 OCR'dan gelen fiyatları semantik olarak ayır
-    unit_price, maliyet, ecz_kar, tutar, selected_qty = normalize_product_total_prices(
-        floats=item.raw_prices,
-        candidate_quantities=candidates,
-    )
+    # 2. Financials Check
+    # If we have explicit semantic extraction, USE IT.
+    
+    sem_tutar = item.exact_total_match
+    sem_price = item.exact_price_match
+    sem_profit = item.exact_profit_match
+    sem_cost = item.exact_cost_match
+    sem_qty = item.exact_quantity_match or (candidates[0] if candidates else 1)
+
+    # If we have robust structure data (Total + Qty are definitive)
+    if sem_tutar and sem_qty:
+        unit_price = sem_price or round(sem_tutar / sem_qty, 2)
+        maliyet = sem_cost or 0.0 # Default to 0 for admin panel display
+        ecz_kar = sem_profit or 0.0
+        tutar = sem_tutar
+        selected_qty = sem_qty
+        
+        print("\n✨ SEMANTIC MAPPING SUCCESS:")
+        print(f"   Barcode: {item.barcode}")
+        print(f"   Qty: {selected_qty}, Total: {tutar}, Profit: {ecz_kar}, Cost: {maliyet}")
+    
+    else:
+        # Fallback to Smart Normalization if headers were ambiguous
+        unit_price, maliyet, ecz_kar, tutar, selected_qty = normalize_product_total_prices(
+            floats=item.raw_prices,
+            candidate_quantities=candidates,
+        )
     print("""
 🧪 TABLE ITEM → SALE ITEM
   🔹 Barcode      : {}
