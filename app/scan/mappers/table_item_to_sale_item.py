@@ -13,14 +13,14 @@ def table_item_to_sale_item(item, product_map):
         return None
 
     # 🔥 OCR'dan gelen fiyatları semantik olarak ayır
-    unit_price, maliyet, ecz_kar, tutar = normalize_product_total_prices(
+    unit_price, maliyet, ecz_kar, tutar, selected_qty = normalize_product_total_prices(
         floats=item.raw_prices,
-        quantity=item.quantity or 1,
+        candidate_quantities=item.quantity_candidates,
     )
     print("""
 🧪 TABLE ITEM → SALE ITEM
   🔹 Barcode      : {}
-  🔹 Quantity     : {}
+  🔹 Quantity     : {} (Selected)
   🔹 Raw Prices   : {}
   🔹 Unit Price   : {}
   🔹 Total Price  : {}
@@ -28,7 +28,7 @@ def table_item_to_sale_item(item, product_map):
   🔹 Profit       : {}
 """.format(
     item.barcode,
-    item.quantity,
+    selected_qty,
     item.raw_prices,
     unit_price,
     tutar,
@@ -40,7 +40,7 @@ def table_item_to_sale_item(item, product_map):
     return SaleItemFromScan(
         urun_id=item.barcode,
         urun_name=product.get("tr_name") or product.get("name"),
-        miktar=item.quantity or 1,
+        miktar=selected_qty,
 
         # 🔥 ADMIN-ONLY FIELDS
         birim_fiyat=unit_price,

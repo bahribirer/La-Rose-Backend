@@ -87,18 +87,14 @@ def parse_line_based_sales_report(
         ints = [x for x in numbers if isinstance(x, int)]
         floats = [x for x in numbers if isinstance(x, float)]
 
-        # 4️⃣ Miktar: İlk pozitif integer (Sıra önemli: Barkod -> Adet -> Fiyat ...)
-        qty = 1
+        # 4️⃣ Miktar Adayları
         valid_ints = [x for x in ints if x > 0]
-        if valid_ints:
-            # 🔥 FIX: Take FIRST integer (Sold Qty), ignore subsequent (Stock Qty)
-            qty = valid_ints[0]
 
-        # 5️⃣ SEMANTIC PRICE INFERENCE
-        unit_price, maliyet, ecz_kar, tutar = normalize_product_total_prices(
+        # 5️⃣ SEMANTIC PRICE INFERENCE & SMART QTY
+        unit_price, maliyet, ecz_kar, tutar, selected_qty = normalize_product_total_prices(
             floats=floats,
-            quantity=qty,
-)
+            candidate_quantities=valid_ints,
+        )
 
 
         # 6️⃣ Confidence (basit)
@@ -118,7 +114,7 @@ def parse_line_based_sales_report(
         print(f"  🔹 Ham Sayılar   : {numbers}")
         print(f"  🔹 Int'ler       : {ints}")
         print(f"  🔹 Float'lar     : {floats}")
-        print(f"  🔹 Miktar        : {qty}")
+        print(f"  🔹 Miktar        : {selected_qty} (Candidates: {valid_ints})")
         print(f"  🔹 Birim Fiyat   : {unit_price}")
         print(f"  🔹 Maliyet       : {maliyet}")
         print(f"  🔹 Ecz. Kar      : {ecz_kar}")
@@ -129,7 +125,7 @@ def parse_line_based_sales_report(
             SaleItemFromScan(
                 urun_id=product["id"],
                 urun_name=product.get("tr_name") or product.get("name"),
-                miktar=qty,
+                miktar=selected_qty,
                 maliyet=maliyet,
                 ecz_kar=ecz_kar,
                 match_confidence=confidence,

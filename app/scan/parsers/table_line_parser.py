@@ -15,6 +15,7 @@ def parse_table_line(item):
 
     item.raw_prices = []
     item.quantity = None
+    item.quantity_candidates = []
     item.barcode = None
 
     # BARCODE
@@ -32,10 +33,8 @@ def parse_table_line(item):
         if raw.isdigit():
             val = int(raw)
             if 0 < val <= 500:
-                # 🔥 FIX: Take FIRST integer (Sold Qty), ignore subsequent (Stock Qty)
-                if item.quantity is None:
-                    item.quantity = val
-                    print("   🔢 QTY:", val)
+                item.quantity_candidates.append(val)
+                print("   🔢 CANDIDATE QTY:", val)
             continue
 
         # fiyat
