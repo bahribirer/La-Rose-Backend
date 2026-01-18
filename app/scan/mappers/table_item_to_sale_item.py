@@ -32,17 +32,27 @@ def table_item_to_sale_item(item, product_map):
     print(f"   Candidates: {candidates} (Exact Match: {item.exact_quantity_match})")
     print(f"   Semantic Values -> Total: {sem_tutar}, Price: {sem_price}, Qty: {sem_qty}")
 
-    # If we have robust structure data (Total + Qty are definitive)
-    if sem_tutar and sem_qty:
-        unit_price = sem_price or round(sem_tutar / sem_qty, 2)
-        maliyet = sem_cost or 0.0 # Default to 0 for admin panel display
-        ecz_kar = sem_profit or 0.0
-        tutar = sem_tutar
+    # If we have robust structure data (Total + Qty OR Price + Qty)
+    if (sem_tutar and sem_qty) or (sem_price and sem_qty):
+        
         selected_qty = sem_qty
+        
+        # Case A: We have Total & Qty (Calculate Unit Price)
+        if sem_tutar:
+            tutar = sem_tutar
+            unit_price = sem_price or (round(tutar / selected_qty, 2) if selected_qty > 0 else 0)
+            
+        # Case B: We have Unit Price & Qty (Calculate Total)
+        elif sem_price:
+            unit_price = sem_price
+            tutar = round(unit_price * selected_qty, 2)
+
+        maliyet = sem_cost or 0.0 
+        ecz_kar = sem_profit or 0.0
         
         print("\n✨ SEMANTIC MAPPING SUCCESS:")
         print(f"   Barcode: {item.barcode}")
-        print(f"   Qty: {selected_qty}, Total: {tutar}, Profit: {ecz_kar}, Cost: {maliyet}")
+        print(f"   Qty: {selected_qty}, Unit Price: {unit_price}, Total: {tutar}")
     
     else:
         # Fallback to Smart Normalization if headers were ambiguous
