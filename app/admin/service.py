@@ -140,7 +140,10 @@ async def get_top_products(start: datetime, end: datetime, limit: int = 10):
             "quantity": int(r.get("quantity", 0)),
             "total_profit": round(r.get("total_profit", 0), 2),
             "total_cost": round(r.get("total_cost", 0), 2),
-            "total_sales": round(r.get("total_sales", 0), 2), # 🔥 Exposed
+            # 🔥 FALLBACK: Sayısal veri yoksa Kâr + Maliyet = Ciro yaklaşımı
+            "total_sales": round(
+                r.get("total_sales", 0) or (r.get("total_profit", 0) + r.get("total_cost", 0)), 2
+            ),
         }
         async for r in cursor
     ]
