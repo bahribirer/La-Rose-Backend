@@ -77,34 +77,31 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             # We look for ANY known header to trigger a scan of the line
             if any(k in row_text for k in ["BARKOD", "URUN", "FIYAT", "ADET", "MALIYET", "KAR", "STOK"]):
                 for t in row:
-                    txt = t["text"].upper()
+                    txt = t["text"].strip().upper()
                     
                     # QTY Zone
-                    if "ADET" in txt or "MIKTAR" in txt or "SAT.AD" in txt:
-                        if "STOK" not in txt:
-                             col_zones["qty"] = (t["x_min"] - 0.02, t["x_max"] + 0.02)
+                    if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET"]:
+                        col_zones["qty"] = (t["x_min"] - 0.02, t["x_max"] + 0.02)
                     
                     # TOTAL Zone
-                    if "TUTAR" in txt or "TOPLAM" in txt:
+                    if txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM"]:
                         col_zones["total"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
                         
                     # PRICE Zone
-                    if "FIYAT" in txt or "BIRIM" in txt:
+                    if txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT"]:
                          col_zones["price"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
 
                     # PROFIT Zone (New!)
-                    if "KAR" in txt or "KÂR" in txt or "KAZANÇ" in txt or "ECZ" in txt: 
-                        # catch "ECZ.KAR" or "ECZ KÂR"
-                        # But be careful not to catch "ECZANE"
-                        if "ECZANE" not in txt:
-                            col_zones["profit"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
+                    # Strict check to avoid "KARSITI" matching "KAR"
+                    if txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]:
+                        col_zones["profit"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
 
                     # COST Zone (New!)
-                    if "MALIYET" in txt or "MALİYET" in txt or "ALIŞ" in txt or "ALIS" in txt or "GELİŞ" in txt or "GELIS" in txt:
+                    if txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]:
                         col_zones["cost"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
 
                     # STOCK Zone (New!)
-                    if "STOK" in txt or "MEVCUT" in txt or "KALAN" in txt or "ELDEKİ" in txt:
+                    if txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]:
                         col_zones["stock"] = (t["x_min"] - 0.05, t["x_max"] + 0.05)
         
         if col_zones:
