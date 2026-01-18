@@ -89,11 +89,10 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 for t in row:
                     txt = t["text"].strip().upper()
                     
-                    # Normalize known headers for sorting
                     h_type = None
-                    if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET"]: h_type = "qty"
-                    elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM"]: h_type = "total"
-                    elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT"]: h_type = "price"
+                    if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET", "SATILAN"]: h_type = "qty"
+                    elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI"]: h_type = "total"
+                    elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT", "S.FIYAT", "S.FİYAT", "SATIS F.", "SATIŞ F.", "PER. SAT.", "P.SATIS", "ETIKET", "ETİKET"]: h_type = "price"
                     elif txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]: h_type = "profit"
                     elif txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]: h_type = "cost"
                     elif txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]: h_type = "stock"
@@ -106,6 +105,15 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             # Sort headers by X position
             header_tokens.sort(key=lambda k: k["x"])
             
+            # INFERENCE: If Price is missing but Stock/Profit exists, assume Price is left of Stock
+            types_found = {h["type"] for h in header_tokens}
+            if "price" not in types_found and "stock" in types_found:
+                stock_idx = next(i for i, h in enumerate(header_tokens) if h["type"] == "stock")
+                # Insert Price as a virtual header left of Stock
+                stock_h = header_tokens[stock_idx]
+                virtual_price = {"type": "price", "x": stock_h["x"] - 0.15, "x_min": stock_h["x_min"] - 0.15, "x_max": stock_h["x_min"] - 0.02}
+                header_tokens.insert(stock_idx, virtual_price)
+                
             # Create disjoint zones based on midpoints between headers
             # Start from 0.0 to first header midpoint
             # Then mid-to-mid
@@ -114,7 +122,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             for i, h in enumerate(header_tokens):
                 # Start boundary
                 if i == 0:
-                    start = max(0.0, h["x_min"] - 0.10) # Don't go all the way to 0.0, leave room for Name
+                    start = max(0.20, h["x_min"] - 0.10) # Don't go all the way to 0.0, leave room for Name (increased safe zone to 0.20)
                 else:
                     prev = header_tokens[i-1]
                     start = (prev["x_max"] + h["x_min"]) / 2
