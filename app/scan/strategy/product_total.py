@@ -89,94 +89,22 @@ class ProductTotalStrategy(ReportStrategy):
             print("ℹ️ NO TABLE FOUND → BLOCK MODE")
 
         # ==================================================
-        # 4️⃣ BLOCK MODE (FALLBACK)
+        # 4️⃣ BLOCK MODE (FALLBACK) -> NOW LINE MODE (ROBUST)
         # ==================================================
+        # Fragile Block Mode replaced by Robust Line Parser
+        from app.scan.parsers.line_report_parser import parse_line_based_sales_report
+        
         lines = extract_lines(document)
+        print(f"🧠 LINE MODE: Processing {len(lines)} lines")
 
-        barcodes: List[str] = []
+        # Line-by-Line parser
+        items = parse_line_based_sales_report(lines, product_map)
 
-        for line in lines:
-            raw = extract_barcode(line)
-            if not raw:
-                continue
+        if items:
+            print(f"✅ PRODUCT_TOTAL → LINE MODE SUCCESS ({len(items)} items)")
+            return {
+                "items": items
+            }
 
-            code = normalize_barcode(raw)
-            if code and code in product_map:
-                barcodes.append(code)
-
-        print(f"🧠 FOUND {len(barcodes)} PRODUCTS (BLOCK MODE)")
-
-        if not barcodes:
-            return {"items": []}
-
-        prices = extract_prices_from_lines(lines)
-        print(f"🧠 FOUND {len(prices)} PRICES (BLOCK MODE)")
-
-        if not prices:
-            return {"items": []}
-
-        columns = round(len(prices) / len(barcodes))
-
-        if columns < 4 or columns > 8:
-            print(
-                f"⚠️ UNEXPECTED COLUMN COUNT ({columns}), "
-                f"FALLING BACK TO 5"
-            )
-            columns = 5
-
-        print(f"📐 PRICE COLUMNS PER PRODUCT: {columns}")
-
-        items: List[SaleItemFromScan] = []
-
-        for idx, barcode in enumerate(barcodes):
-            base = idx * columns
-            block = prices[base: base + columns]
-
-            if len(block) < columns:
-                print(f"⚠️ PRICE BLOCK MISSING FOR {barcode}")
-                continue
-
-            product = product_map[barcode]
-
-            # 🔥 FİYAT SEMANTİĞİ ÇÖZ
-            unit_price, maliyet, ecz_kar, tutar = (
-                normalize_product_total_prices(
-                    floats=block,
-                    quantity=1,
-                )
-            )
-
-            print(f"""
-🧪 BLOCK MODE PRICE MAP
-  🔹 Barcode     : {barcode}
-  🔹 Raw Prices  : {block}
-  🔹 Unit Price  : {unit_price}
-  🔹 Total       : {tutar}
-  🔹 Cost        : {maliyet}
-  🔹 Profit      : {ecz_kar}
-""")
-
-            items.append(
-    SaleItemFromScan(
-        urun_id=barcode,
-        urun_name=product.get("tr_name") or product.get("name"),
-        miktar=1,
-
-        # 🔥 ADMIN FIELDS (EKSİK OLANLAR)
-        birim_fiyat=unit_price,
-        tutar=tutar,
-
-        # 🔥 FİNANS
-        maliyet=maliyet,
-        ecz_kar=ecz_kar,
-
-        match_confidence=0.95,
-    )
-)
-
-
-        print(f"✅ PRODUCT_TOTAL → BLOCK MODE SUCCESS ({len(items)} items)")
-
-        return {
-            "items": items
-        }
+        print("⚠️ LINE MODE FAILED (No items found)")
+        return {"items": []}
