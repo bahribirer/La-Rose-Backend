@@ -54,10 +54,32 @@ def parse_line_based_sales_report(
             i += 1
             continue
 
-        i += 1
+        # 2️⃣ Barkoddan sonraki sayıları topla
         numbers: List[Union[int, float]] = []
 
-        # 2️⃣ Barkoddan sonraki sayıları topla
+        # 🚨 FIX: Current line might contain numbers too! Parse it first.
+        # Remove barcode from raw string to avoid re-parsing it as a number (though regex handles it)
+        # Just scan the whole line for numbers.
+        current_tokens = raw.split()
+        for token in current_tokens:
+             if INT_RE.fullmatch(token) or PRICE_RE.fullmatch(token):
+                if "," in token:
+                     clean = token.replace(".", "").replace(",", ".")
+                     val = float(clean)
+                elif "." in token:
+                     val = float(token)
+                else:
+                     val = int(token)
+                
+                # Avoid adding the barcode itself as a number if it looks like one (usually > 10 digits)
+                if isinstance(val, int) and val > 1000000000:
+                    continue
+                    
+                numbers.append(val)
+
+        i += 1
+        
+        # 3️⃣ Continue scanning subsequent lines until next product
         while i < n:
             token = lines[i].strip()
 
