@@ -254,13 +254,13 @@ async def admin_report_detail(report_id: str):
             "unit_price": float(i.get("unitPrice") or i.get("unit_price") or 0),
             "total_price": float(i.get("totalPrice") or i.get("total_price") or 0),
             # camelCase for Frontend
-            "unitPrice": float(i.get("unitPrice") or i.get("unit_price") or 0),
-            "totalPrice": float(i.get("totalPrice") or i.get("total_price") or 0),
-            "price": float(i.get("unitPrice") or i.get("unit_price") or 0),
+            "unitPrice": float(i.get("unitPrice") or i.get("unit_price") or i.get("birim_fiyat") or 0),
+            "totalPrice": float(i.get("totalPrice") or i.get("total_price") or i.get("tutar") or 0),
+            "price": float(i.get("unitPrice") or i.get("unit_price") or i.get("birim_fiyat") or 0),
             
-            "profit": float(i.get("profit") or 0),
-            "cost": float(i.get("cost") or 0),
-            "confidence": float(i.get("confidence") or 0),
+            "profit": float(i.get("profit") or i.get("ecz_kar") or 0),
+            "cost": float(i.get("cost") or i.get("maliyet") or 0),
+            "confidence": float(i.get("confidence") or i.get("match_confidence") or 0),
         })
 
     # 🔥 FIX: Admin Panel needs total_revenue (profit + cost)
