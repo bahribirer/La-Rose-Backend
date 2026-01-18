@@ -266,7 +266,9 @@ async def admin_report_detail(report_id: str):
     # 🔥 FIX: Admin Panel needs total_revenue (profit + cost)
     summary = report.get("summary", {})
     if "total_revenue" not in summary:
-        summary["total_revenue"] = summary.get("total_sales") or (summary.get("total_profit", 0) + summary.get("total_cost", 0))
+        summary["total_revenue"] = summary.get("total_sales") or (summary.get("total_profit", 0) + summary.get("total_cost", 0) + 0.0001)
+
+    print(f"🚀 ADMIN DETAIL RESP: {summary} | ITEM[0]: {items[0] if items else 'EMPTY'}")
 
     return {
         "id": str(report["_id"]),
