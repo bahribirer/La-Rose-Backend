@@ -45,7 +45,6 @@ async def save_scan_report(
         if (ecz_kar is None or ecz_kar == 0) and item.urun_id in recovery_map:
             print(f"🔧 RESTORING PROFIT for {item.urun_id}")
             rec = recovery_map[item.urun_id]
-            print(f"   🔍 RECOVERY MAP DATA: {rec}")
             ecz_kar = rec.get("ecz_kar") or 0.0
             maliyet = rec.get("maliyet") or 0.0
 

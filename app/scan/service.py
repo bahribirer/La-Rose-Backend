@@ -69,10 +69,6 @@ async def scan_report_bytes(binary: bytes) -> dict:
     items = result.get("items", [])
 
     # ---------- 🔥 SAVE RAW OCR RESULT ----------
-    # DEBUG TRACE
-    for idx, x in enumerate(items):
-        print(f"   🔍 TRACE SCAN SAVE [{idx}]: {x.urun_id} => birim_fiyat={x.birim_fiyat} (alias={getattr(x, 'unitPrice', 'NA')})")
-
     scan_doc = {
         "createdAt": datetime.utcnow(),
         "source": "ocr",

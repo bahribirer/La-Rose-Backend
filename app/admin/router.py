@@ -247,6 +247,9 @@ async def admin_report_detail(report_id: str):
             # 🔥 FIX: Return prices to Admin Panel
             "unit_price": float(i.get("unitPrice") or i.get("unit_price") or 0),
             "total_price": float(i.get("totalPrice") or i.get("total_price") or 0),
+            # camelCase for Frontend
+            "unitPrice": float(i.get("unitPrice") or i.get("unit_price") or 0),
+            "totalPrice": float(i.get("totalPrice") or i.get("total_price") or 0),
             
             "profit": float(i.get("profit") or 0),
             "cost": float(i.get("cost") or 0),
