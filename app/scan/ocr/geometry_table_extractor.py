@@ -41,55 +41,80 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 "obj": token
             })
 
-        # 2️⃣ Group by Rows (Smart Vertical Overlap)
-        # Sort by Y-center primarily
-        all_tokens.sort(key=lambda k: k["y"])
+        # 2️⃣ Group by Rows (Barcode-Anchored Clustering)
+        # Strategy: Find all barcodes first. They are the "Anchors" of each row.
+        # Then assign every other token to the closest Barcode Row (vertically).
         
+        barcodes = []
+        others = []
+        
+        for t in all_tokens:
+            txt = t["text"]
+            # Strict Barcode Detection: 13 digits
+            if txt.isdigit() and len(txt) == 13:
+                barcodes.append(t)
+            else:
+                others.append(t)
+
         rows = []
-        if all_tokens:
-            current_row = [all_tokens[0]]
-            # Track the geometric bounds of the current row group
-            row_y_min = all_tokens[0]["y"] - (all_tokens[0]["obj"].layout.bounding_poly.normalized_vertices[2].y - all_tokens[0]["obj"].layout.bounding_poly.normalized_vertices[0].y) / 2
-            row_y_max = all_tokens[0]["y"] + (all_tokens[0]["obj"].layout.bounding_poly.normalized_vertices[2].y - all_tokens[0]["obj"].layout.bounding_poly.normalized_vertices[0].y) / 2
+        
+        if not barcodes:
+            print("⚠️ NO BARCODES FOUND IN GEOMETRY MODE. FALLING BACK TO BLIND LINE CLUSTERING.")
+            # Fallback to previous logic if no barcodes found (unlikely for product reports)
+            all_tokens.sort(key=lambda k: k["y"])
+            if all_tokens:
+                 current_row = [all_tokens[0]]
+                 for t in all_tokens[1:]:
+                     if (t["y"] - current_row[0]["y"]) < 0.01: # Strict Y
+                         current_row.append(t)
+                     else:
+                         rows.append(current_row)
+                         current_row = [t]
+                 rows.append(current_row)
+        else:
+            # We have barcodes. Create a row for each.
+            # Sort barcodes by Y to be sure of order
+            barcodes.sort(key=lambda k: k["y"])
             
-            for t in all_tokens[1:]:
-                # Calculate token height/bounds
-                h = t["obj"].layout.bounding_poly.normalized_vertices[2].y - t["obj"].layout.bounding_poly.normalized_vertices[0].y
-                t_y_min = t["y"] - h/2
-                t_y_max = t["y"] + h/2
+            # Init rows with just the barcode
+            row_map = {id(b): [b] for b in barcodes}
+            barcode_ys = {id(b): b["y"] for b in barcodes}
+            
+            # Assign other tokens to closest barcode row
+            for t in others:
+                # Find closest barcode Y
+                closest_bid = min(barcode_ys.keys(), key=lambda bid: abs(t["y"] - barcode_ys[bid]))
+                dist = abs(t["y"] - barcode_ys[closest_bid])
                 
-                # Dynamic Row Bounds (average of current row)
-                avg_y = sum(x["y"] for x in current_row) / len(current_row)
-                avg_h = sum((x["obj"].layout.bounding_poly.normalized_vertices[2].y - x["obj"].layout.bounding_poly.normalized_vertices[0].y) for x in current_row) / len(current_row)
-                
-                r_min = avg_y - avg_h/1.5 # Relaxed top
-                r_max = avg_y + avg_h/1.5 # Relaxed bottom
-                
-                # Check Overlap
-                # If token overlaps significantly with the row's vertical band
-                overlap = min(t_y_max, r_max) - max(t_y_min, r_min)
-                if overlap > 0:
-                     current_row.append(t)
+                # Threshold: If token is too far from the barcode Y, it's noise/header/footer
+                # 0.02 is approx 2% of page height. Report lines are usually tight.
+                if dist < 0.025: 
+                    row_map[closest_bid].append(t)
                 else:
-                    _finalize_row(rows, current_row)
-                    current_row = [t]
-            
-            if current_row:
-                _finalize_row(rows, current_row)
+                    # Token is likely a Header or Footer far from any product
+                    # We can store it for Header Detection if we want, but for now strict mode: drop it
+                    # (Wait, we need Headers to define zones! So we must collect headers differently)
+                    pass
+
+            # Convert map to list of rows
+            for b in barcodes:
+                r = row_map[id(b)]
+                r.sort(key=lambda k: k["x"]) # Sort by X left-to-right
+                rows.append(r)
+
+            print(f"🧩 BARCODE CLUSTER MODE: Created {len(rows)} robust rows.")
 
         # 3️⃣ Detect Headers & Define DISJOINT Column Zones
         header_tokens = []
         
-        # Scan first 10 rows for headers
-        for i in range(min(len(rows), 10)):
-            row = rows[i]
-            row_text = " ".join([t["text"].upper() for t in row])
-            
-            if any(k in row_text for k in ["BARKOD", "URUN", "FIYAT", "ADET", "MALIYET", "KAR", "STOK"]):
-                for t in row:
-                    txt = t["text"].strip().upper()
+        # 3️⃣ Detect Headers (Scan *ALL* tokens, not just rows, because headers don't have barcodes!)
+        header_tokens = []
+        
+        # We look for header keywords in the Top 30% of the page usually
+        # But scanning all tokens is safer
+        for t in all_tokens:
+             txt = t["text"].strip().upper()
                     
-                    h_type = None
                     if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET", "SATILAN"]: h_type = "qty"
                     elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI"]: h_type = "total"
                     elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT", "S.FIYAT", "S.FİYAT", "SATIS F.", "SATIŞ F.", "PER. SAT.", "P.SATIS", "ETIKET", "ETİKET"]: h_type = "price"
