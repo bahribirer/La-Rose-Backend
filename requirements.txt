@@ -10,3 +10,4 @@ pillow
 pdf2image
 numpy
 rapidfuzz
+google-cloud-documentai

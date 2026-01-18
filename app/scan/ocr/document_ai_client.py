@@ -1,4 +1,4 @@
-from google.cloud import documentai_v1 as documentai
+from google.cloud import documentai
 from google.api_core.client_options import ClientOptions
 
 PROJECT_ID = "548043448414"
