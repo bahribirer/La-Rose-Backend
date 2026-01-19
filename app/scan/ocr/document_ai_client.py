@@ -3,7 +3,7 @@ from google.api_core.client_options import ClientOptions
 
 PROJECT_ID = "548043448414"
 LOCATION = "us"
-PROCESSOR_ID = "83954e265b135018"
+PROCESSOR_ID = "d9cefd8bf7d33096" # Custom Trained Processor (v2)
 
 
 def process_document(file_path: str):
