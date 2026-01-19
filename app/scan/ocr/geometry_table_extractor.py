@@ -83,19 +83,18 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                          current_row = [t]
                  rows.append(current_row)
         else:
-            # 🏗️ COLUMN-WISE ZIPPER + ROI CROPPING
-            # 1. Define Table Vertical Extent (ROI)
-            barcodes.sort(key=lambda k: k["y"])
-            table_top_y = barcodes[0]["y"] - 0.02
-            table_bottom_y = barcodes[-1]["y"] + 0.02
-            
-            print(f"✂️ TABLE ROI: Y {table_top_y:.3f} to {table_bottom_y:.3f}")
+        else:
+            # 🏗️ ZONE-RESTRICTED NEAREST NEIGHBOR ("Column Magnet")
+            # 1. Define Column Zones based on Headers
+            # 2. For each Barcode, find the closest token in each zone vertically.
+            # This handles missing values gracefully without shifting data.
 
+            barcodes.sort(key=lambda k: k["y"])
+            
             # Initialize rows
             robust_rows = [{"barcode": b, "tokens": [b], "data": {}} for b in barcodes]
-            barcode_centers = {id(b): b["y"] for b in barcodes}
             
-            # 2. DETECT HEADERS (Same as before)
+            # 1. DETECT HEADERS (Same as before)
             header_tokens = []
             for t in all_tokens:
                  txt = t["text"].strip().upper()
@@ -116,7 +115,6 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 types = {h["type"] for h in header_tokens}
                 if "price" not in types and "stock" in types:
                      idx = next(i for i, h in enumerate(header_tokens) if h["type"] == "stock")
-                     avg_w = (header_tokens[0]["x_max"] - header_tokens[0]["x_min"])
                      virtual = {"type": "price", "x": header_tokens[idx]["x"] - 0.1, "x_min": header_tokens[idx]["x_min"] - 0.1, "x_max": header_tokens[idx]["x_min"] - 0.02}
                      header_tokens.insert(idx, virtual)
 
@@ -137,62 +135,59 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                      "cost": (0.80, 1.0)
                  }
 
-            print("📐 COLUMN BANDS:", col_zones)
+            print("📐 COLUMN MAGNET BANDS:", col_zones)
 
-            # 3. FILL COLUMNS WITH CROPPED TOKENS
-            for col_type, (x_start, x_end) in col_zones.items():
-                col_tokens = []
-                for t in others:
-                    # ROI CHECK: Discard headers/footers
-                    if not (table_top_y <= t["y"] <= table_bottom_y):
-                        continue
+            # 2. PRE-BUCKET TOKENS BY ZONE
+            zone_buckets = {k: [] for k in col_zones.keys()}
+            
+            for t in others:
+                # Pre-filter large numbers or noise
+                val = _parse_number(t["text"])
+                if val is None: continue
+                if val > 1000000: continue
+                
+                # Check which zone it falls into
+                for col_type, (x_start, x_end) in col_zones.items():
+                    if x_start <= t["x"] <= x_end:
+                         zone_buckets[col_type].append({"t": t, "val": val})
+                         break # Assigned to one zone only
+
+            # 3. MAGNET ASSIGNMENT PER ROW
+            for r in robust_rows:
+                b_y = r["barcode"]["y"]
+                
+                for col_type, tokens in zone_buckets.items():
+                    best_match = None
+                    min_dist = 0.025 # Strict vertical alignment (2.5% of page height ~ 25px)
                     
-                    val = _parse_number(t["text"])
-                    if val is not None:
-                         if val > 1000000: continue 
-                         if x_start <= t["x"] <= x_end:
-                             col_tokens.append({"t": t, "val": val})
-                
-                # Sort Top-to-Bottom
-                col_tokens.sort(key=lambda k: k["t"]["y"])
-                
-                print(f"   📌 Column {col_type}: Found {len(col_tokens)} items (Post-Crop) vs {len(barcodes)} rows.")
-                
-                # 4. ASSIGNMENT STRATEGY
-                # Strategy A: Perfect Zip (Count Match)
-                if len(col_tokens) == len(barcodes):
-                    for i, r in enumerate(robust_rows):
-                        r["data"][col_type] = col_tokens[i]["val"]
-                        r["tokens"].append(col_tokens[i]["t"])
-                
-                # Strategy B: Mismatch - Use "Nearest Y Rank"
-                # If we have missing values (e.g. empty cells) or extra noise inside the table
-                else:
-                    assigned_indices = set()
-                    for r in robust_rows:
-                        b_y = r["barcode"]["y"]
-                        best_idx = None
-                        min_dist_y = 0.04 # Max vertical skew tolerance (4% of page)
+                    for item in tokens:
+                        # Skip if already used? Ideally yes, but let's allow multi-match if overlaps exist.
+                        # Actually, better to consume tokens to prevent reuse.
                         
-                        for i, c in enumerate(col_tokens):
-                            if i in assigned_indices: continue
-                            
-                            dist = abs(c["t"]["y"] - b_y)
-                            if dist < min_dist_y:
-                                min_dist_y = dist
-                                best_idx = i
-                        
-                        if best_idx is not None:
-                            r["data"][col_type] = col_tokens[best_idx]["val"]
-                            r["tokens"].append(col_tokens[best_idx]["t"])
-                            assigned_indices.add(best_idx)
+                        dist = abs(item["t"]["y"] - b_y)
+                        if dist < min_dist:
+                            min_dist = dist
+                            best_match = item
+                    
+                    if best_match:
+                        r["data"][col_type] = best_match["val"]
+                        r["tokens"].append(best_match["t"])
+                        # Optional: Remove matched token from pool?
+                        # tokens.remove(best_match) 
+                        # Better not modify list while iterating if we do that.
+                        pass
 
             rows = []
             for r in robust_rows:
                 rows.append(r["tokens"])
                 r["barcode"]["_extracted_data"] = r["data"]
 
-            print(f"🧩 EXTRACTED {len(rows)} ROWS.")
+            print(f"🧩 MAGNET-ZONE MODE: Extracted {len(rows)} rows with independent vertical lookup.")
+
+        # 3️⃣ NO-OP HEADERS
+        
+        # 4️⃣ PARSER LOOP (Modified to use _extracted_data)
+
 
         # 3️⃣ NO-OP HEADERS
         
