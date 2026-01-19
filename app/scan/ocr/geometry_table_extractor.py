@@ -71,7 +71,6 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                          current_row = [t]
                  rows.append(current_row)
         else:
-        else:
             # 🏗️ NEAREST NEIGHBOR VERTICAL ASSIGNMENT (The "Magnet" Method)
             # The previous method merged everything into one line because Y-clustering was too aggressive.
             # Now, we treat each Barcode as a "Magnet". 
