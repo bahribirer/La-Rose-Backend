@@ -70,19 +70,6 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                          rows.append(current_row)
                          current_row = [t]
                  rows.append(current_row)
-        if not barcodes:
-            print("⚠️ NO BARCODES FOUND IN GEOMETRY MODE. FALLING BACK TO BLIND LINE CLUSTERING.")
-            all_tokens.sort(key=lambda k: k["y"])
-            if all_tokens:
-                 current_row = [all_tokens[0]]
-                 for t in all_tokens[1:]:
-                     if (t["y"] - current_row[0]["y"]) < 0.015: 
-                         current_row.append(t)
-                     else:
-                         rows.append(current_row)
-                         current_row = [t]
-                 rows.append(current_row)
-        else:
         else:
             # 🏗️ ZONE-RESTRICTED NEAREST NEIGHBOR ("Column Magnet")
             # 1. Define Column Zones based on Headers
