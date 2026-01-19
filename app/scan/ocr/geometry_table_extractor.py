@@ -451,17 +451,12 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 # Filter out numbers that are NOT in valid zones
                 val = _parse_number(t["text"])
                 if val is not None:
-                    # Is it in ANY valid financial zone?
-                    in_zone = False
-                    for z_type, (z_min, z_max) in col_zones.items():
-                        if z_min <= t["x"] <= z_max:
-                            in_zone = True
-                            break
-                    
-                    # If it's a number but NOT in a financial zone, ignore it as token
-                    # This prevents "400 ML" -> "400" getting picked up as Quantity
-                    if not in_zone:
-                        continue 
+                # Filter out numbers that are NOT in valid zones -> REMOVED because we are using Semantic Solver now.
+                # All numbers in the row are candidates.
+                val = _parse_number(t["text"])
+                if val is not None:
+                     # (Optional: Add size checks here if needed)
+                     pass 
 
                 doc_tokens.append(DocumentToken(
                     text=t["text"],
