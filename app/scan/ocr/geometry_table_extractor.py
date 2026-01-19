@@ -159,17 +159,17 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                         txt = t["text"].strip().upper()
                         h_type = None
 
-                 if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET", "SATILAN"]: h_type = "qty"
-                 elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI", "SATIŞ TUTARI", "TUTAR"]: h_type = "total"
-                 elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT", "S.FIYAT", "S.FİYAT", "SATIS F.", "SATIŞ F.", "PER. SAT.", "P.SATIS", "ETIKET", "ETİKET"]: h_type = "price"
-                 elif txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]: h_type = "profit"
-                 elif txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]: h_type = "cost"
-                 elif txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]: h_type = "stock"
-                 elif txt in ["KDV", "KDV TUTAR", "KDV TUTARI", "VERGI"]: h_type = "tax"
-                 elif txt in ["NET", "NET SATIŞ", "NET SATIS", "NET TUTAR"]: h_type = "net_total"
-                 
-                 if h_type:
-                    header_tokens.append({"type": h_type, "x": t["x"], "x_min": t["x_min"], "x_max": t["x_max"]})
+                        if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET", "SATILAN"]: h_type = "qty"
+                        elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI", "SATIŞ TUTARI", "TUTAR"]: h_type = "total"
+                        elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT", "S.FIYAT", "S.FİYAT", "SATIS F.", "SATIŞ F.", "PER. SAT.", "P.SATIS", "ETIKET", "ETİKET"]: h_type = "price"
+                        elif txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]: h_type = "profit"
+                        elif txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]: h_type = "cost"
+                        elif txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]: h_type = "stock"
+                        elif txt in ["KDV", "KDV TUTAR", "KDV TUTARI", "VERGI"]: h_type = "tax"
+                        elif txt in ["NET", "NET SATIŞ", "NET SATIS", "NET TUTAR"]: h_type = "net_total"
+                        
+                        if h_type:
+                            header_tokens.append({"type": h_type, "x": t["x"], "x_min": t["x_min"], "x_max": t["x_max"]})
             
             col_zones = {}
             if header_tokens:
