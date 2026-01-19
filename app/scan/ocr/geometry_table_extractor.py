@@ -262,47 +262,85 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                         # [Small, Large] -> [Profit, Total]? or [Price, Cost]?
                         # Try to find Relationship: A * Qty = B
                         
-                        found_relation = False
-                        # Check UnitPrice * Qty = Total
-                        for i in range(len(financials)):
-                            for j in range(len(financials)):
-                                if i == j: continue
-                                A = financials[i]
-                                B = financials[j]
+                        # 1. Try Additive Relationship first (Profit + Cost = Total)
+                        # This generates the most confidence because it explains 3 numbers.
+                        found_additive = False
+                        if len(financials) >= 3:
+                            for i in range(len(financials)):
+                                for j in range(len(financials)):
+                                    for k in range(len(financials)):
+                                        if i == j or i == k or j == k: continue
+                                        A = financials[i]
+                                        B = financials[j]
+                                        C = financials[k] # Potential Total
+                                        
+                                        # Tolerance check for A + B = C
+                                        if abs((A + B) - C) < 0.5:
+                                            # We found Profit + Cost = Total!
+                                            # Usually Cost > Profit, but not always.
+                                            # C is definitely Total.
+                                            r["data"]["total"] = C
+                                            r["data"]["cost"] = max(A, B) # Assumption: Cost is usually larger than Profit
+                                            r["data"]["profit"] = min(A, B) 
+                                            
+                                            found_additive = True
+                                            
+                                            # The remaining number is likely "List Price"
+                                            remaining = [f for f in financials if f not in (A, B, C)]
+                                            if remaining:
+                                                r["data"]["price"] = remaining[0]
+                                            else:
+                                                # If no List Price found, use Total/Qty (Net Price)
+                                                r["data"]["price"] = C / qty
+                                            break
+                                    if found_additive: break
+                                if found_additive: break
+
+                        if not found_additive:
+                            # 2. Try Multiplicative Relationship (Price * Qty = Total)
+                            for i in range(len(financials)):
+                                for j in range(len(financials)):
+                                    if i == j: continue
+                                    A = financials[i]
+                                    B = financials[j]
+                                    
+                                    # Tolerance for float math (OCR noise)
+                                    if abs((A * qty) - B) < 0.5:
+                                        r["data"]["price"] = A
+                                        r["data"]["total"] = B
+                                        found_relation = True
+                                        break
+                                if found_relation: break
+                            
+                            if not found_relation:
+                                # Fallback: Largest is Total.
+                                max_val = financials[-1]
+                                r["data"]["total"] = max_val
                                 
-                                # Tolerance for float math (OCR noise)
-                                if abs((A * qty) - B) < 0.5:
-                                    r["data"]["price"] = A
-                                    r["data"]["total"] = B
-                                    found_relation = True
-                                    break
-                            if found_relation: break
-                        
-                        if not found_relation:
-                            # Fallback: Largest is Total.
-                            # Second Largest is likely Cost? Or Price?
-                            # If Qty=1, Largest is Price & Total.
-                            max_val = financials[-1]
-                            r["data"]["total"] = max_val
-                            
-                            if qty == 1:
-                                r["data"]["price"] = max_val
-                            else:
-                                # Estimate Unit Price
-                                r["data"]["price"] = max_val / qty
-                            
-                            # Fallback 2: Identify Cost / Profit from remainder
-                             # E.g. [Profit, Cost] -> Cost is usually larger > Profit (but smaller than Price/Total ideally)
-                            remaining = [f for f in financials if f != r["data"].get("price") and f != r["data"].get("total")]
-                            
-                            # Deduplicate (e.g. if Price=Total, don't double count)
-                            remaining = sorted(list(set(remaining)))
-                            
-                            if remaining:
-                                # Likely Cost is the largest remaining
-                                r["data"]["cost"] = remaining[-1]
-                                if len(remaining) > 1:
-                                    r["data"]["profit"] = remaining[0]
+                                if qty == 1:
+                                    r["data"]["price"] = max_val
+                                else:
+                                    r["data"]["price"] = max_val / qty
+                                
+                                # Fallback 2: Identify Cost / Profit from remainder
+                                remaining = [f for f in financials if f != r["data"].get("price") and f != r["data"].get("total")]
+                                remaining = sorted(list(set(remaining)))
+                                
+                                if remaining:
+                                    r["data"]["cost"] = remaining[-1]
+                                    if len(remaining) > 1:
+                                        r["data"]["profit"] = remaining[0]
+
+                    # C. Identify Stock (Secondary Small Integer)
+                    # We already picked one small int as 'qty'.
+                    # Any other small int in the row could be 'stock'.
+                    # Image shows 'Stock' column exists.
+                    potential_stocks = [n for n in nums if isinstance(n, int) and n < 1000 and n != r["data"].get("qty")]
+                    if potential_stocks:
+                        # If multiple, picking one is hard.
+                        # Heuristic: Stock is usually AFTER Total or BEFORE Profit.
+                        # For now, just pick the first available one as best guess.
+                         r["data"]["stock"] = potential_stocks[0]
                     
                     # Mark tokens as used
                     for c in row_candidates:
