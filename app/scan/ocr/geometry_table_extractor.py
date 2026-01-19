@@ -448,9 +448,6 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                      doc_tokens.append(DocumentToken(text=t["text"], layout=t["obj"].layout))
                      continue
                 
-                # Filter out numbers that are NOT in valid zones
-                val = _parse_number(t["text"])
-                if val is not None:
                 # Filter out numbers that are NOT in valid zones -> REMOVED because we are using Semantic Solver now.
                 # All numbers in the row are candidates.
                 val = _parse_number(t["text"])
