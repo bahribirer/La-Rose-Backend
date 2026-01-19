@@ -60,118 +60,64 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         
         if not barcodes:
             print("⚠️ NO BARCODES FOUND IN GEOMETRY MODE. FALLING BACK TO BLIND LINE CLUSTERING.")
-            # Fallback
             all_tokens.sort(key=lambda k: k["y"])
             if all_tokens:
                  current_row = [all_tokens[0]]
                  for t in all_tokens[1:]:
-                     if (t["y"] - current_row[0]["y"]) < 0.01: 
+                     if (t["y"] - current_row[0]["y"]) < 0.015: 
                          current_row.append(t)
                      else:
                          rows.append(current_row)
                          current_row = [t]
                  rows.append(current_row)
         else:
-            # 🏗️ CLUSTER-THEN-ASSIGN STRATEGY
-            # 1. Cluster non-barcode tokens into visual lines first
-            others.sort(key=lambda k: k["y"])
-            text_lines = []
-            if others:
-                current_line = [others[0]]
-                # 0.01 is roughly 1% of page height. Valid for single spacing.
-                for t in others[1:]:
-                    last_y = (current_line[-1]["obj"].layout.bounding_poly.normalized_vertices[0].y + current_line[-1]["obj"].layout.bounding_poly.normalized_vertices[2].y) / 2
-                    curr_y = (t["obj"].layout.bounding_poly.normalized_vertices[0].y + t["obj"].layout.bounding_poly.normalized_vertices[2].y) / 2
+            # 🏗️ ROBUST LINE CLUSTERING (The "Human Eye" Method)
+            # Instead of complex slicing, just group things that "look like a line"
+            # 1. Sort all tokens by Y
+            all_tokens.sort(key=lambda k: k["y"])
+            
+            # 2. Cluster into lines based on Y-center proximity
+            lines = []
+            if all_tokens:
+                curr_line = [all_tokens[0]]
+                curr_y_sum = (all_tokens[0]["y_min"] + all_tokens[0]["y_max"]) / 2
+                curr_count = 1
+                
+                for t in all_tokens[1:]:
+                    t_center = (t["y_min"] + t["y_max"]) / 2
+                    avg_y = curr_y_sum / curr_count
                     
-                    if abs(curr_y - last_y) < 0.015: # 1.5% tolerance for line grouping
-                        current_line.append(t)
+                    # If token center is within 1.5% height of line average -> Same Line
+                    # 0.015 is roughly 5-10 pixels on 1000px image, good for single spacing
+                    if abs(t_center - avg_y) < 0.02: 
+                        curr_line.append(t)
+                        curr_y_sum += t_center
+                        curr_count += 1
                     else:
-                        text_lines.append(current_line)
-                        current_line = [t]
-                text_lines.append(current_line)
+                        lines.append(curr_line)
+                        curr_line = [t]
+                        curr_y_sum = t_center
+                        curr_count = 1
+                lines.append(curr_line) # Last line
 
-            # 2. Assign each Text Line to the nearest Barcode
-            # Since barcodes define the "True Rows"
-            barcodes.sort(key=lambda k: k["y"])
-            row_map = {id(b): [b] for b in barcodes}
+            # 3. Filter for Lines with Barcodes
+            # A line is valid ONLY if it contains a 13-digit barcode
+            print(f"📊 FOUND {len(lines)} VISUAL LINES. CHECKING FOR BARCODES...")
             
-            for line in text_lines:
-                # Calculate avg Y of the line
-                y_sum = 0
-                for t in line:
-                    y_sum += (t["obj"].layout.bounding_poly.normalized_vertices[0].y + t["obj"].layout.bounding_poly.normalized_vertices[2].y) / 2
-                line_y = y_sum / len(line)
+            for line in lines:
+                line_barcodes = [t for t in line if t["text"].isdigit() and len(t["text"]) == 13]
                 
-                # Find nearest barcode
-                best_bid = None
-                min_dist = 999.0
-                
-                for b in barcodes:
-                    b_y = (b["obj"].layout.bounding_poly.normalized_vertices[0].y + b["obj"].layout.bounding_poly.normalized_vertices[2].y) / 2
-                    dist = abs(line_y - b_y)
-                    
-                    # Optimization: Only link if within reasonable distance (e.g. 5% page height)
-                    # Prevents header/footer from attaching to top/bottom rows randomly
-                    if dist < 0.05 and dist < min_dist:
-                        min_dist = dist
-                        best_bid = id(b)
-                
-                if best_bid:
-                    row_map[best_bid].extend(line)
-
-            # Convert map to list of rows
-            for b in barcodes:
-                r = row_map[id(b)]
-                r.sort(key=lambda k: k["x"]) 
-                rows.append(r)
-
-            print(f"🧩 BARCODE LINE-CLUSTERING MODE: Created {len(rows)} robust rows.")
-
-        # 3️⃣ Detect Headers & Define DISJOINT Column Zones
-        header_tokens = []
-        for t in all_tokens:
-             txt = t["text"].strip().upper()
-             
-             h_type = None
-             if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET", "SATILAN"]: h_type = "qty"
-             elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI"]: h_type = "total"
-             elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT", "S.FIYAT", "S.FİYAT", "SATIS F.", "SATIŞ F.", "PER. SAT.", "P.SATIS", "ETIKET", "ETİKET"]: h_type = "price"
-             elif txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]: h_type = "profit"
-             elif txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]: h_type = "cost"
-             elif txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]: h_type = "stock"
+                if line_barcodes:
+                    # This is a valid product row!
+                    # Sort by X to read left-to-right
+                    line.sort(key=lambda k: k["x"])
+                    rows.append(line)
             
-             if h_type:
-                header_tokens.append({"type": h_type, "x": t["x"], "x_min": t["x_min"], "x_max": t["x_max"]})
+            print(f"🧩 BARCODE LINE MODE: Identified {len(rows)} valid product rows from visual lines.")
 
-        col_zones = {}
-        if header_tokens:
-            # Sort headers by X position
-            header_tokens.sort(key=lambda k: k["x"])
-            
-            # INFERENCE: If Price is missing but Stock/Profit exists, assume Price is left of Stock
-            types_found = {h["type"] for h in header_tokens}
-            if "price" not in types_found and "stock" in types_found:
-                stock_idx = next(i for i, h in enumerate(header_tokens) if h["type"] == "stock")
-                stock_h = header_tokens[stock_idx]
-                virtual_price = {"type": "price", "x": stock_h["x"] - 0.15, "x_min": stock_h["x_min"] - 0.15, "x_max": stock_h["x_min"] - 0.02}
-                header_tokens.insert(stock_idx, virtual_price)
-            
-            for i, h in enumerate(header_tokens):
-                if i == 0:
-                    start = max(0.20, h["x_min"] - 0.10) 
-                else:
-                    prev = header_tokens[i-1]
-                    start = (prev["x_max"] + h["x_min"]) / 2
-                
-                if i == len(header_tokens) - 1:
-                    end = 1.0
-                else:
-                    nxt = header_tokens[i+1]
-                    end = (h["x_max"] + nxt["x_min"]) / 2
-                    
-                col_zones[h["type"]] = (start, end)
-                
-            print("📐 GEOMETRIC HEADERS FOUND (DISJOINT):", col_zones)
+        # 3️⃣ SKIP HEADERS - WE TRUST THE ROW CONTENT
+        col_zones = {} # We don't use zones anymore, we use row logic.
+
 
         # 4️⃣ Extract Data from Rows using Column Zones (STRICT MODE + WIDEST SCOPE FALLBACK)
         for row in rows:
