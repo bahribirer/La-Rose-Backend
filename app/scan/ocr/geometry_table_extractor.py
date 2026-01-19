@@ -71,6 +71,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                          current_row = [t]
                  rows.append(current_row)
         else:
+        else:
             # 🏗️ ZONE-RESTRICTED NEAREST NEIGHBOR ("Column Magnet")
             # 1. Define Column Zones based on Headers
             # 2. For each Barcode, find the closest token in each zone vertically.
@@ -81,32 +82,37 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             # Initialize rows
             robust_rows = [{"barcode": b, "tokens": [b], "data": {}} for b in barcodes]
             
-            # 1. DETECT HEADERS (Same as before)
+            # 1. DETECT HEADERS (Expanded)
             header_tokens = []
             for t in all_tokens:
                  txt = t["text"].strip().upper()
                  h_type = None
                  if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET", "SATILAN"]: h_type = "qty"
-                 elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI"]: h_type = "total"
+                 elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI", "SATIŞ TUTARI", "TUTAR"]: h_type = "total"
                  elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT", "S.FIYAT", "S.FİYAT", "SATIS F.", "SATIŞ F.", "PER. SAT.", "P.SATIS", "ETIKET", "ETİKET"]: h_type = "price"
                  elif txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]: h_type = "profit"
                  elif txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]: h_type = "cost"
                  elif txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]: h_type = "stock"
+                 elif txt in ["KDV", "KDV TUTAR", "KDV TUTARI", "VERGI"]: h_type = "tax"
+                 elif txt in ["NET", "NET SATIŞ", "NET SATIS", "NET TUTAR"]: h_type = "net_total"
+                 
                  if h_type:
                     header_tokens.append({"type": h_type, "x": t["x"], "x_min": t["x_min"], "x_max": t["x_max"]})
             
             col_zones = {}
             if header_tokens:
                 header_tokens.sort(key=lambda k: k["x"])
-                # Inference Logic (Virtual Price etc.)
+                
+                # INFERENCE: If Price missing but Stock/Profit exists, inject Price
                 types = {h["type"] for h in header_tokens}
+                # (Existing inference logic...)
                 if "price" not in types and "stock" in types:
                      idx = next(i for i, h in enumerate(header_tokens) if h["type"] == "stock")
                      virtual = {"type": "price", "x": header_tokens[idx]["x"] - 0.1, "x_min": header_tokens[idx]["x_min"] - 0.1, "x_max": header_tokens[idx]["x_min"] - 0.02}
                      header_tokens.insert(idx, virtual)
 
                 for i, h in enumerate(header_tokens):
-                    if i == 0: start = max(0.25, h["x_min"] - 0.15) 
+                    if i == 0: start = max(0.20, h["x_min"] - 0.15) 
                     else: start = (header_tokens[i-1]["x_max"] + h["x_min"]) / 2
                     if i == len(header_tokens) - 1: end = 1.0
                     else: end = (h["x_max"] + header_tokens[i+1]["x_min"]) / 2
@@ -117,9 +123,9 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                      "qty": (0.45, 0.50),
                      "price": (0.50, 0.58),
                      "total": (0.58, 0.65),
-                     "stock": (0.65, 0.70),
-                     "profit": (0.70, 0.80),
-                     "cost": (0.80, 1.0)
+                     "tax": (0.65, 0.72),
+                     "profit": (0.72, 0.85),
+                     "cost": (0.85, 1.0)
                  }
 
             print("📐 COLUMN MAGNET BANDS:", col_zones)
@@ -128,7 +134,6 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             zone_buckets = {k: [] for k in col_zones.keys()}
             
             for t in others:
-                # Pre-filter large numbers or noise
                 val = _parse_number(t["text"])
                 if val is None: continue
                 if val > 1000000: continue
@@ -137,20 +142,21 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 for col_type, (x_start, x_end) in col_zones.items():
                     if x_start <= t["x"] <= x_end:
                          zone_buckets[col_type].append({"t": t, "val": val})
-                         break # Assigned to one zone only
+                         # Don't break immediately, allow overlap? No, strict zones safer.
+                         break
 
             # 3. MAGNET ASSIGNMENT PER ROW
             for r in robust_rows:
                 b_y = r["barcode"]["y"]
                 
+                # Fallback: Capture "Leftmost Small Integer" as Qty if not found in Zone
+                # We search ALL others for this, in case Qty zone was wrong.
+                
                 for col_type, tokens in zone_buckets.items():
                     best_match = None
-                    min_dist = 0.025 # Strict vertical alignment (2.5% of page height ~ 25px)
+                    min_dist = 0.025 # 2.5% height tolerance
                     
                     for item in tokens:
-                        # Skip if already used? Ideally yes, but let's allow multi-match if overlaps exist.
-                        # Actually, better to consume tokens to prevent reuse.
-                        
                         dist = abs(item["t"]["y"] - b_y)
                         if dist < min_dist:
                             min_dist = dist
@@ -159,10 +165,32 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                     if best_match:
                         r["data"][col_type] = best_match["val"]
                         r["tokens"].append(best_match["t"])
-                        # Optional: Remove matched token from pool?
-                        # tokens.remove(best_match) 
-                        # Better not modify list while iterating if we do that.
-                        pass
+            
+            # 4. QTY FALLBACK CHECK
+            # If Qty is missing or 0, scan nearby tokens (left 20% of barcode center?)
+            # Actually, usually immediately Right of barcode.
+            for r in robust_rows:
+                if "qty" not in r["data"]:
+                    b = r["barcode"]
+                    # Search for any small integer (1-50) that is close in Y and right of Barcode
+                    candidates = []
+                    for t in others:
+                        val = _parse_number(t["text"])
+                        if val is None: continue
+                        if 1 <= val < 100 and (isinstance(val, int) or val.is_integer()):
+                            # Y-Check
+                            if abs(t["y"] - b["y"]) < 0.025:
+                                # X-Check: Must be right of Barcode
+                                if t["x"] > b["x"]:
+                                    candidates.append({"t": t, "val": val, "dist": t["x"] - b["x"]})
+                    
+                    if candidates:
+                        # Pick the physically closest one to the right
+                        candidates.sort(key=lambda k: k["dist"])
+                        best = candidates[0]
+                        print(f"🔦 BLIND QTY RESCUE: Found {best['val']} for barcode {b['text']}")
+                        r["data"]["qty"] = int(best["val"])
+                        r["tokens"].append(best["t"])
 
             rows = []
             for r in robust_rows:
@@ -174,6 +202,43 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         # 3️⃣ NO-OP HEADERS
         
         # 4️⃣ PARSER LOOP (Modified to use _extracted_data)
+        for row in rows:
+            # ... (Standard Parse) ...
+            
+            barcodes = [t for t in row if t["text"].isdigit() and len(t["text"]) == 13]
+            if not barcodes: continue
+
+            exact_qty = None
+            exact_total = None
+            exact_price = None
+            exact_profit = None
+            exact_cost = None
+            exact_stock = None
+            exact_tax = None
+            exact_net_total = None
+            
+            # --- ZIPPER/MAGNET OVERRIDE ---
+            if "_extracted_data" in barcodes[0]:
+                data = barcodes[0]["_extracted_data"]
+                exact_qty = data.get("qty")
+                exact_total = data.get("total")
+                exact_price = data.get("price")
+                exact_cost = data.get("cost")
+                exact_profit = data.get("profit")
+                exact_stock = data.get("stock")
+                exact_tax = data.get("tax")
+                exact_net_total = data.get("net_total")
+                
+                # INFERENCE: Calculate Total from Net+Tax if needed
+                if exact_net_total and exact_tax and not exact_total:
+                     exact_total = exact_net_total + exact_tax
+                
+                # INFERENCE: If we have Sales Total but no Unit Price, calc it
+                if exact_total and exact_qty and not exact_price:
+                     exact_price = exact_total / exact_qty
+
+            unused_numbers = []
+
 
 
         # 3️⃣ NO-OP HEADERS
