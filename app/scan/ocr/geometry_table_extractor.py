@@ -159,31 +159,48 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 barcodes.sort(key=lambda k: k["y"])
                 robust_rows = [{"barcode": b, "tokens": [b], "data": {}} for b in barcodes]
 
-                used_token_ids = set()
-
                 # 1. PRE-COMPUTE CANDIDATES & IDENTIFY GLOBAL NOISE
-                # Common headers/footers (like "18/07/2024" or Invoice ID "12345") might be picked up in every row.
-                # We need to filter them out if they appear too frequently.
+                # Strategy: "Token-to-Nearest-Barcode"
+                # To handle skew/curve, we allow a wide vertical tolerance (e.g. 5-8% of page).
+                # But to prevent rows stealing each other's data, each token is assigned ONLY to its closest barcode.
+
                 from collections import defaultdict
                 global_number_counts = defaultdict(int)
                 
+                # Prepare rows dict for quick access
+                # robust_rows is a list of dicts.
+                
+                # Initialize candidates list for each row
                 for r in robust_rows:
-                    b_y = r["barcode"]["y"]
-                    b_x = r["barcode"]["x"]
+                    r["temp_candidates"] = []
+
+                # Iterate ALL non-barcode tokens
+                for t in others:
+                    val = _parse_number(t["text"])
+                    if val is None: continue
                     
-                    row_candidates = []
-                    for t in others:
-                        # Y-Distance Check
-                        if abs(t["y"] - b_y) < 0.025:
-                            val = _parse_number(t["text"])
-                            if val is not None:
-                                dist = abs(t["x"] - b_x)
-                                row_candidates.append({"t": t, "val": val, "dist": dist})
-                                global_number_counts[val] += 1
+                    # Count for Global Noise
+                    global_number_counts[val] += 1
+
+                    # Find Closest Barcode
+                    best_row = None
+                    min_dist = 0.08 # Wide tolerance (8% of page height) to catch skewed numbers
                     
-                    # Sort candidates by X
-                    row_candidates.sort(key=lambda k: k["t"]["x"])
-                    r["temp_candidates"] = row_candidates
+                    for r in robust_rows:
+                        dist = abs(t["y"] - r["barcode"]["y"])
+                        if dist < min_dist:
+                            min_dist = dist
+                            best_row = r
+                    
+                    # Assign to best row
+                    if best_row:
+                        # Calculate X-distance for later sorting
+                        x_dist = abs(t["x"] - best_row["barcode"]["x"])
+                        best_row["temp_candidates"].append({"t": t, "val": val, "dist": x_dist})
+
+                # Sort candidates in each row by X (Left-to-Right)
+                for r in robust_rows:
+                    r["temp_candidates"].sort(key=lambda k: k["t"]["x"])
 
                 # Identify Blacklist (Repeating Numbers)
                 # If a number appears in > 3 rows OR > 50% of rows (if rows > 2)
@@ -205,7 +222,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 # 2. RUN SEMANTIC SOLVER
                 for r in robust_rows:
                     # Filter candidates
-                    row_candidates = [c for c in r["temp_candidates"] if c["val"] not in blacklist and id(c["t"]) not in used_token_ids]
+                    row_candidates = [c for c in r["temp_candidates"] if c["val"] not in blacklist]
                     
                     # We have a bag of numbers: e.g. [1, 792.0, 884.28]
                     # Goal: Assign Qty, Price, Total, Cost, Profit etc.
@@ -233,7 +250,6 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                         for c in row_candidates:
                             if c["val"] == qty:
                                 r["tokens"].append(c["t"])
-                                used_token_ids.add(id(c["t"]))
                                 break
                     else:
                         r["data"]["qty"] = 1 # Default
