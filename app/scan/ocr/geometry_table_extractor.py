@@ -243,10 +243,10 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 if not matched_zone:
                     unused_numbers.append(val)
             
-            # 5️⃣ WIDEST SCOPE FALLBACK
-            # If explicit zones failed, use smart inference from unused numbers
+            # 5️⃣ SMART MAP LOGIC (Fallback or Enhancement)
+            # If explicit zones failed or we want to double check against "all numbers found"
             
-            # Smart Qty: First NEW number that is a small integer (< 50)
+            # First, filter potential QTY from unused numbers if not already found
             if exact_qty is None:
                 for n in unused_numbers:
                      if (isinstance(n, int) or n.is_integer()) and n < 50:
@@ -254,28 +254,75 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                          unused_numbers.remove(n)
                          break
             
-            # Smart Price/Total Logic
-            # If we have 2 numbers remaining: Smaller is Price, Larger is Total
-            # If we have 1 number remaining: It is Price (system can calculate total later) or Total? 
-            # Usually users care about Unit Price.
+            # Use default Qty=1 if still missing (safe assumption for single line items usually)
+            current_qty = exact_qty if exact_qty else 1
+
+            # Now look at remaining floats to determine Cost, Price, Total
+            # We have loose numbers in `unused_numbers` + any we might have assigned to `exact_...` 
+            # actually let's re-evaluate everything from the pool of numbers in the row vs the slots
             
-            floats = [n for n in unused_numbers]
-            floats.sort() # Sort ascending
+            # Collective Pool of monetary candidates (excluding the Qty we just found)
+            # We want to fill: Cost, Unit Price, Total Price
             
-            if len(floats) >= 2:
-                # Assuming [Unit Price, Total Price] pattern roughly
-                if exact_price is None:
-                    exact_price = floats[0] # Smallest is price
-                if exact_total is None:
-                    exact_total = floats[-1] # Largest is total (likely)
-            elif len(floats) == 1:
-                if exact_price is None:
-                    exact_price = floats[0]
+            pool = [n for n in unused_numbers]
+            # Add back verified values to pool to re-verify relative logic? 
+            # No, keep zone matches if they exist. Only fill gaps from pool.
             
-            # Sanity Check: If Price > Total (and Qty > 1), swap them
-            if exact_price and exact_total and exact_qty and exact_qty > 1:
-                if exact_price > exact_total:
-                    exact_price, exact_total = exact_total, exact_price
+            pool.sort() # Smallest to Largest
+
+            if pool:
+                # Scenario A: We have 3 numbers -> Likely [Cost, UnitPrice, TotalPrice] (or [Cost, Total, Unit]?? No usually Total is largest)
+                # But sometimes Cost > UnitPrice (loss).
+                # MATH CHECK: P * Q = T
+                
+                # Try to find a pair (P, T) such that P * current_qty ~= T
+                found_math_match = False
+                if len(pool) >= 2 and current_qty > 1:
+                     # Check all pairs
+                     import itertools
+                     for p, t in itertools.permutations(pool, 2):
+                         if abs(p * current_qty - t) < 0.1:
+                             # MSTCH!
+                             if exact_price is None: exact_price = p
+                             if exact_total is None: exact_total = t
+                             pool.remove(p)
+                             pool.remove(t)
+                             found_math_match = True
+                             break
+                
+                # If no math match (or Qty=1 where P=T), assign by size
+                if not found_math_match:
+                    # If we have 3 numbers, and strict zones failed:
+                    # Smallest is likely Cost. Middle is Unit. Largest is Total.
+                    if len(pool) == 3:
+                        if exact_cost is None: exact_cost = pool[0]
+                        if exact_price is None: exact_price = pool[1]
+                        if exact_total is None: exact_total = pool[2]
+                    
+                    elif len(pool) == 2:
+                        # [Small, Large] -> Likely [Unit, Total] or [Cost, Unit]
+                        # If we already have Price, then [Cost, Total]?
+                        # Heuristic: Users care about Unit Price and Cost.
+                        if exact_price is None: exact_price = pool[0] # Assume smaller is unit price
+                        if exact_total is None: exact_total = pool[1] # Assume larger is total
+                        
+                    elif len(pool) == 1:
+                        # Just one number. Is it Unit Price or Total?
+                        # If Qty=1, it's both.
+                        val = pool[0]
+                        if exact_price is None: exact_price = val
+                        if exact_total is None: exact_total = val * current_qty
+
+            # Final Sanity Check for relationships
+            if exact_price and exact_qty and not exact_total:
+                exact_total = exact_price * exact_qty
+                
+            # If we have a Total but no Price, infer Price
+            if exact_total and exact_qty and not exact_price:
+                exact_price = exact_total / exact_qty
+
+            # If we identified a Cost, ensure it's logged
+            # (Cost is often "Maliyet" or "Alış")
 
 
             # Create DocumentLineItem
