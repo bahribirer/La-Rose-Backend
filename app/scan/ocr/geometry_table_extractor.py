@@ -96,7 +96,17 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 if denominator != 0:
                     slope = numerator / denominator
                     rotation_angle = math.atan(slope)
-                    print(f"🔄 DETECTED SKEW ANGLE: {math.degrees(rotation_angle):.2f} degrees")
+                    print(f"🔄 RAW DETECTED SKEW ANGLE: {math.degrees(rotation_angle):.2f} degrees")
+                    
+                    # 🛡️ SAFETY CLAMP: Max 5 degrees rotation
+                    # Pharmacy receipts are rarely rotated > 5deg.
+                    # Large angles usually mean the regression found widely scattered headers (not a line).
+                    MAX_ROTATION = math.radians(5.0)
+                    if abs(rotation_angle) > MAX_ROTATION:
+                        print(f"⚠️ ROTATION TOO LARGE ({math.degrees(rotation_angle):.2f} deg). CLAMPING to 0.")
+                        rotation_angle = 0.0 # Better to not rotate than to destroy it
+                    else:
+                        print(f"✅ APPLYING SKEW CORRECTION: {math.degrees(rotation_angle):.2f} degrees")
 
             # 2. Rotate All Tokens
             # Center of rotation doesn't matter much for relative alignment, use (0.5, 0.5)
