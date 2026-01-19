@@ -152,131 +152,145 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 print("⚠️ NO BARCODES FOUND IN GEOMETRY MODE (POST-ROTATION).")
                 # (Fallback Logic omitted for brevity, usually barcodes exist)
             else:
-                # 🏗️ ZONE-RESTRICTED NEAREST NEIGHBOR ("Column Magnet")
-                # Now working on STRAIGHTENED coordinates.
+                # 🏗️ BARCODE-CENTRIC ROW SOLVER ("Semantic Row Parser")
+                # Instead of defining vertical zones (which fail on skew/shift),
+                # we group ALL tokens near a barcode into a "Row Bag" and solve the math.
 
                 barcodes.sort(key=lambda k: k["y"])
-                
-                # Initialize rows
                 robust_rows = [{"barcode": b, "tokens": [b], "data": {}} for b in barcodes]
-                
-                # 1. DETECT HEADERS (Expanded)
-                header_tokens = []
-                for t in all_tokens:
-                        txt = t["text"].strip().upper()
-                        h_type = None
 
-                        if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET", "SATILAN"]: h_type = "qty"
-                        elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI", "SATIŞ TUTARI", "TUTAR"]: h_type = "total"
-                        elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT", "S.FIYAT", "S.FİYAT", "SATIS F.", "SATIŞ F.", "PER. SAT.", "P.SATIS", "ETIKET", "ETİKET"]: h_type = "price"
-                        elif txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]: h_type = "profit"
-                        elif txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]: h_type = "cost"
-                        elif txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]: h_type = "stock"
-                        elif txt in ["KDV", "KDV TUTAR", "KDV TUTARI", "VERGI"]: h_type = "tax"
-                        elif txt in ["NET", "NET SATIŞ", "NET SATIS", "NET TUTAR"]: h_type = "net_total"
-                        
-                        if h_type:
-                            header_tokens.append({"type": h_type, "x": t["x"], "x_min": t["x_min"], "x_max": t["x_max"]})
-            
-            col_zones = {}
-            if header_tokens:
-                header_tokens.sort(key=lambda k: k["x"])
-                
-                # INFERENCE: If Price missing but Stock/Profit exists, inject Price
-                types = {h["type"] for h in header_tokens}
-                # (Existing inference logic...)
-                if "price" not in types and "stock" in types:
-                     idx = next(i for i, h in enumerate(header_tokens) if h["type"] == "stock")
-                     virtual = {"type": "price", "x": header_tokens[idx]["x"] - 0.1, "x_min": header_tokens[idx]["x_min"] - 0.1, "x_max": header_tokens[idx]["x_min"] - 0.02}
-                     header_tokens.insert(idx, virtual)
+                used_token_ids = set()
 
-                for i, h in enumerate(header_tokens):
-                    if i == 0: start = max(0.20, h["x_min"] - 0.15) 
-                    else: start = (header_tokens[i-1]["x_max"] + h["x_min"]) / 2
-                    if i == len(header_tokens) - 1: end = 1.0
-                    else: end = (h["x_max"] + header_tokens[i+1]["x_min"]) / 2
-                    col_zones[h["type"]] = (start, end)
-            else:
-                 print("⚠️ NO HEADERS FOUND. USING DEFAULT ZONES.")
-                 col_zones = {
-                     "qty": (0.45, 0.50),
-                     "price": (0.50, 0.58),
-                     "total": (0.58, 0.65),
-                     "tax": (0.65, 0.72),
-                     "profit": (0.72, 0.85),
-                     "cost": (0.85, 1.0)
-                 }
-
-            print("📐 COLUMN MAGNET BANDS:", col_zones)
-
-            # 2. PRE-BUCKET TOKENS BY ZONE
-            zone_buckets = {k: [] for k in col_zones.keys()}
-            
-            for t in others:
-                val = _parse_number(t["text"])
-                if val is None: continue
-                if val > 1000000: continue
-                
-                # Check which zone it falls into
-                for col_type, (x_start, x_end) in col_zones.items():
-                    if x_start <= t["x"] <= x_end:
-                         zone_buckets[col_type].append({"t": t, "val": val})
-                         # Don't break immediately, allow overlap? No, strict zones safer.
-                         break
-
-            # 3. MAGNET ASSIGNMENT PER ROW
-            for r in robust_rows:
-                b_y = r["barcode"]["y"]
-                
-                # Fallback: Capture "Leftmost Small Integer" as Qty if not found in Zone
-                # We search ALL others for this, in case Qty zone was wrong.
-                
-                for col_type, tokens in zone_buckets.items():
-                    best_match = None
-                    min_dist = 0.025 # 2.5% height tolerance
+                for r in robust_rows:
+                    b_y = r["barcode"]["y"]
+                    b_x = r["barcode"]["x"]
                     
-                    for item in tokens:
-                        dist = abs(item["t"]["y"] - b_y)
-                        if dist < min_dist:
-                            min_dist = dist
-                            best_match = item
-                    
-                    if best_match:
-                        r["data"][col_type] = best_match["val"]
-                        r["tokens"].append(best_match["t"])
-            
-            # 4. QTY FALLBACK CHECK
-            # If Qty is missing or 0, scan nearby tokens (left 20% of barcode center?)
-            # Actually, usually immediately Right of barcode.
-            for r in robust_rows:
-                if "qty" not in r["data"]:
-                    b = r["barcode"]
-                    # Search for any small integer (1-50) that is close in Y and right of Barcode
-                    candidates = []
+                    # 1. Gather Candidates (Vertical Proximity)
+                    # Look for numbers roughly on the same line (Y +/- 2.5%)
+                    row_candidates = []
                     for t in others:
-                        val = _parse_number(t["text"])
-                        if val is None: continue
-                        if 1 <= val < 100 and (isinstance(val, int) or val.is_integer()):
-                            # Y-Check
-                            if abs(t["y"] - b["y"]) < 0.025:
-                                # X-Check: Must be right of Barcode
-                                if t["x"] > b["x"]:
-                                    candidates.append({"t": t, "val": val, "dist": t["x"] - b["x"]})
+                        if id(t) in used_token_ids: continue
+                        
+                        # Y-Distance Check
+                        if abs(t["y"] - b_y) < 0.025:
+                            # Parse Value
+                            val = _parse_number(t["text"])
+                            if val is not None:
+                                # Distance from Barcode (for breaking ties later)
+                                dist = abs(t["x"] - b_x)
+                                row_candidates.append({"t": t, "val": val, "dist": dist})
+
+                    # Sort by X-coordinate (Left-to-Right reading order)
+                    row_candidates.sort(key=lambda k: k["t"]["x"])
+
+                    # 2. Semantic Solve
+                    # We have a bag of numbers: e.g. [1, 792.0, 884.28]
+                    # Goal: Assign Qty, Price, Total, Cost, Profit etc.
                     
-                    if candidates:
-                        # Pick the physically closest one to the right
-                        candidates.sort(key=lambda k: k["dist"])
-                        best = candidates[0]
-                        print(f"🔦 BLIND QTY RESCUE: Found {best['val']} for barcode {b['text']}")
-                        r["data"]["qty"] = int(best["val"])
-                        r["tokens"].append(best["t"])
+                    nums = [c["val"] for c in row_candidates]
+                    
+                    qty = 1
+                    financials = []
+
+                    # A. Identify Quantity (Small Integer < 50)
+                    # Heuristic: The small integer immediately to the right of barcode is likely Qty.
+                    # Or just any small integer in the row.
+                    potential_qtys = [n for n in nums if isinstance(n, int) and n < 50]
+                    
+                    if potential_qtys:
+                        # Prioritize the one closest to Barcode? Or just the first one?
+                        # Usually Qty is the first number after Description.
+                        qty = potential_qtys[0]
+                        # Remove it from financials list to avoid confusion
+                        # (Remove only one instance of it)
+                        nums.remove(qty)
+                        r["data"]["qty"] = qty
+                        
+                        # Add token to row
+                        for c in row_candidates:
+                            if c["val"] == qty:
+                                r["tokens"].append(c["t"])
+                                used_token_ids.add(id(c["t"]))
+                                break
+                    else:
+                        r["data"]["qty"] = 1 # Default
+
+                    # B. Identify Financials
+                    # Remaining numbers are likely monetary.
+                    # Sort them: Profit < Cost < Price < Total (usually)
+                    # But if Qty=1, Price=Total.
+                    # If Net/Gross exists, Total might be larger.
+                    
+                    financials = sorted([n for n in nums if n >= 0.5]) # Filter tiny noise
+                    
+                    # Store finding
+                    r["data"]["financials"] = financials
+                    
+                    # Logic Tree:
+                    if len(financials) == 0:
+                        pass # No data
+                    
+                    elif len(financials) == 1:
+                        # Only one number? It's likely the Total Price.
+                        r["data"]["total"] = financials[0]
+                        r["data"]["price"] = financials[0] / qty
+                        
+                    elif len(financials) >= 2:
+                        # [Small, Large] -> [Profit, Total]? or [Price, Cost]?
+                        # Try to find Relationship: A * Qty = B
+                        
+                        found_relation = False
+                        # Check UnitPrice * Qty = Total
+                        for i in range(len(financials)):
+                            for j in range(len(financials)):
+                                if i == j: continue
+                                A = financials[i]
+                                B = financials[j]
+                                
+                                # Tolerance for float math (OCR noise)
+                                if abs((A * qty) - B) < 0.5:
+                                    r["data"]["price"] = A
+                                    r["data"]["total"] = B
+                                    found_relation = True
+                                    break
+                            if found_relation: break
+                        
+                        if not found_relation:
+                            # Fallback: Largest is Total.
+                            # Second Largest is likely Cost? Or Price?
+                            # If Qty=1, Largest is Price & Total.
+                            max_val = financials[-1]
+                            r["data"]["total"] = max_val
+                            
+                            if qty == 1:
+                                r["data"]["price"] = max_val
+                            else:
+                                # Estimate Unit Price
+                                r["data"]["price"] = max_val / qty
+
+                            # Identify Cost / Profit from remainder
+                            remaining = [f for f in financials if f != max_val]
+                            if remaining:
+                                # E.g. [Profit, Cost] -> Cost is usually larger > Profit
+                                # So largest remaining is Cost.
+                                remaining.sort()
+                                r["data"]["cost"] = remaining[-1]
+                                if len(remaining) > 1:
+                                    r["data"]["profit"] = remaining[0]
+                    
+                    # Mark tokens as used
+                    for c in row_candidates:
+                        if c["val"] in financials:
+                             r["tokens"].append(c["t"])
+                             # extracted_data logic handles values, tokens just for viz/debug
+                             pass
 
             rows = []
             for r in robust_rows:
                 rows.append(r["tokens"])
                 r["barcode"]["_extracted_data"] = r["data"]
 
-            print(f"🧩 MAGNET-ZONE MODE: Extracted {len(rows)} rows with independent vertical lookup.")
+            print(f"🧩 SEMANTIC SOLVER: Extracted {len(rows)} rows.")
 
         # 3️⃣ NO-OP HEADERS
         
