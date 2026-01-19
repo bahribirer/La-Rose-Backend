@@ -13,12 +13,16 @@ def extract_items_from_entities(document) -> List[DocumentLineItem]:
         return []
 
     print(f"🧩 FOUND {len(document.entities)} ENTITIES")
+    
+    # DEBUG: Print all entity types to see what we got
+    all_types = list(set([e.type_ for e in document.entities]))
+    print(f"📋 AVAILABLE ENTITY TYPES: {all_types}")
 
     # Iterate over entities
     # The schema might be flat (barcode, qty...) or nested (LineItem -> barcode, qty...)
     # Based on user screenshot: 'items' is a Parent entity.
     
-    parent_items = [e for e in document.entities if e.type_ == "items"]
+    parent_items = [e for e in document.entities if e.type_ in ["items", "Items", "line_item", "LineItem"]]
     
     if not parent_items:
         # Fallback: Maybe they are flat?
