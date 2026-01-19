@@ -76,43 +76,42 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             barcodes.sort(key=lambda k: k["y"])
             row_map = {id(b): [b] for b in barcodes}
             
-            # Pre-calculate Barcode Geometry (Vertical Box)
-            barcode_boxes = {}
-            for b in barcodes:
-                y_min = b["obj"].layout.bounding_poly.normalized_vertices[0].y
-                y_max = b["obj"].layout.bounding_poly.normalized_vertices[2].y
-                # Expand box slightly (tiny buffer 5%) to catch edge-case alignments
-                h = y_max - y_min
-                barcode_boxes[id(b)] = (y_min - h*0.05, y_max + h*0.05)
-
-            # Assign other tokens: CENTER-IN-BOX
-            for t in others:
-                # Calculate Token Center
-                t_y_min = t["obj"].layout.bounding_poly.normalized_vertices[0].y
-                t_y_max = t["obj"].layout.bounding_poly.normalized_vertices[2].y
-                t_center = (t_y_min + t_y_max) / 2
+            # 📏 MIDPOINT SLICING (Sort Hat Logic)
+            # Dividing the page into horizontal strips based on barcode positions
+            # This is robust against curve/tilt because it uses the relative order of barcodes
+            slice_boundaries = []
+            for i in range(len(barcodes)):
+                b_curr = barcodes[i]
+                bid = id(b_curr)
                 
-                best_bid = None
-                
-                # Check which barcode box contains this center
-                # In rare case of overlap, pick closest center
-                min_dist_to_center = 999.0
-                
-                for bid, (b_min, b_max) in barcode_boxes.items():
-                    if b_min <= t_center <= b_max:
-                        # It's inside!
-                        b_center = (b_min + b_max) / 2
-                        dist = abs(t_center - b_center)
-                        
-                        if dist < min_dist_to_center:
-                            min_dist_to_center = dist
-                            best_bid = bid
-                
-                if best_bid:
-                     row_map[best_bid].append(t)
+                # Top Boundary
+                if i == 0:
+                    top = 0.0
                 else:
-                    # Token center is outside all barcode boxes -> Noise/Header/Footer
-                    pass
+                    b_prev = barcodes[i-1]
+                    top = (b_prev["y"] + b_curr["y"]) / 2
+                
+                # Bottom Boundary
+                if i == len(barcodes) - 1:
+                    bottom = 1.0
+                else:
+                    b_next = barcodes[i+1]
+                    bottom = (b_curr["y"] + b_next["y"]) / 2
+                    
+                slice_boundaries.append((bid, top, bottom))
+
+            # Assign other tokens to their slice
+            for t in others:
+                y = t["y"]
+                assigned = False
+                for bid, top, bottom in slice_boundaries:
+                    if top <= y < bottom:
+                        row_map[bid].append(t)
+                        assigned = True
+                        break
+                
+                # If unassigned (should be impossible with 0.0-1.0 coverage), pass
+                pass
 
             # Convert map to list of rows
             for b in barcodes:
@@ -120,7 +119,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 r.sort(key=lambda k: k["x"]) 
                 rows.append(r)
 
-            print(f"🧩 BARCODE CENTER-IN-BOX MODE: Created {len(rows)} robust rows.")
+            print(f"🧩 BARCODE SLICING MODE: Created {len(rows)} robust rows via MIDPOINT CUTS.")
 
         # 3️⃣ Detect Headers & Define DISJOINT Column Zones
         header_tokens = []
