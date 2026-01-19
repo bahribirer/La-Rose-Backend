@@ -201,12 +201,22 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
 
         # 3️⃣ NO-OP HEADERS
         
-        # 4️⃣ PARSER LOOP (Modified to use _extracted_data)
+        # 4️⃣ PARSER LOOP
+        # We assume 'rows' contains lists of tokens.
+        # If Zone Magnet was used, the barcode token has '_extracted_data' attached.
+        
         for row in rows:
-            # ... (Standard Parse) ...
-            
+            raw_text = " ".join([t["text"] for t in row])
+            row_upper = raw_text.upper()
+
+            # 🛑 NOISE FILTER
+            if "SAYFA" in row_upper or "LISTELENEN" in row_upper or "TOPLAM" in row_upper:
+                continue
+
+            # 🔍 BARCODE CHECK
             barcodes = [t for t in row if t["text"].isdigit() and len(t["text"]) == 13]
-            if not barcodes: continue
+            if not barcodes:
+                continue
 
             exact_qty = None
             exact_total = None
@@ -217,7 +227,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             exact_tax = None
             exact_net_total = None
             
-            # --- ZIPPER/MAGNET OVERRIDE ---
+            # --- ZONE MAGNET DATA INJECTION ---
             if "_extracted_data" in barcodes[0]:
                 data = barcodes[0]["_extracted_data"]
                 exact_qty = data.get("qty")
@@ -239,64 +249,26 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
 
             unused_numbers = []
 
-
-
-        # 3️⃣ NO-OP HEADERS
-        
-        # 4️⃣ PARSER LOOP
-        # ... (Next block handles parsing) ...
-
-
-        # 3️⃣ SKIP HEADERS 
-        # (Already used them in Zipper)
-
-        # 4️⃣ BYPASS HEURISTIC & USE ZIPPED DATA
-        # We need to modify the loop below to check for `_extracted_data`
-
-
-
-
-        # 4️⃣ Extract Data from Rows using Column Zones (STRICT MODE + WIDEST SCOPE FALLBACK)
-        for row in rows:
-            raw_text = " ".join([t["text"] for t in row])
-            row_upper = raw_text.upper()
-
-            # 🛑 NOISE FILTER
-            if "SAYFA" in row_upper or "LISTELENEN" in row_upper or "TOPLAM" in row_upper:
-                continue
-
-            # 🔍 BARCODE CHECK
-            barcodes = [t for t in row if t["text"].isdigit() and len(t["text"]) == 13]
-            if not barcodes:
-                continue
-
-            exact_qty = None
-            exact_total = None
-            exact_price = None
-            exact_profit = None
-            exact_cost = None
-            exact_stock = None
-            
-            unused_numbers = []
-
             for t in row:
                 t_center = t["x"]
                 val = _parse_number(t["text"])
                 if val is None: continue
-                # Skip the barcode itself from being a price/qty
-                if t["text"].isdigit() and len(t["text"]) == 13 and val > 10000:
+                # Skip the barcode itself and massive numbers
+                if t["text"].isdigit() and len(t["text"]) == 13:
+                    continue
+                if val > 1000000:
                     continue
 
                 matched_zone = False
                 
-                # Check Zones First
-                if "qty" in col_zones:
+                # Check Zones First (Legacy Fallback)
+                if "qty" in col_zones and exact_qty is None:
                     if col_zones["qty"][0] <= t_center <= col_zones["qty"][1]:
-                        if (isinstance(val, int) or (isinstance(val, float) and val.is_integer())) and exact_qty is None:
-                             # STRICT CAP: Qty > 50 is likely noise or code
+                        if (isinstance(val, int) or (isinstance(val, float) and val.is_integer())):
                              if val < 50:
                                 exact_qty = int(val)
                                 matched_zone = True
+                
                 
                 if "total" in col_zones:
                     if col_zones["total"][0] <= t_center <= col_zones["total"][1]:
