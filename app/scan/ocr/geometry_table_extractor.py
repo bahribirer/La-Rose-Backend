@@ -242,55 +242,31 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                     qty = 1
                     financials = []
 
-                    # A. Identify Quantity (Small Integer < 50)
-                    # Heuristic: The small integer immediately to the right of barcode is likely Qty.
-                    # Or just any small integer in the row.
-                    potential_qtys = [n for n in nums if isinstance(n, int) and n < 50]
-                    
-                    if potential_qtys:
-                        # Prioritize the one closest to Barcode? Or just the first one?
-                        # Usually Qty is the first number after Description.
-                        qty = potential_qtys[0]
-                        # Remove it from financials list to avoid confusion
-                        # (Remove only one instance of it)
-                        nums.remove(qty)
-                        r["data"]["qty"] = qty
-                        
-                        # Add token to row
-                        for c in row_candidates:
-                            if c["val"] == qty:
-                                r["tokens"].append(c["t"])
-                                break
-                    else:
-                        r["data"]["qty"] = 1 # Default
-
-                    # B. Identify Financials
-                    # Remaining numbers are likely monetary.
-                    # Sort them: Profit < Cost < Price < Total (usually)
-                    # But if Qty=1, Price=Total.
-                    # If Net/Gross exists, Total might be larger.
-                    
+                    qty = 1
                     financials = sorted([n for n in nums if n >= 0.5]) # Filter tiny noise
                     
                     # Store finding
                     r["data"]["financials"] = financials
+
+                    # A. Identify Potential Quantities (Small Integers < 50)
+                    potential_qtys = [n for n in nums if isinstance(n, int) and n < 50]
                     
-                    # Logic Tree:
-                    if len(financials) == 0:
-                        pass # No data
+                    # B. MATH-FIRST QTY SELECTION
+                    # Attempt to find which Q candidate makes the math work.
                     
-                    elif len(financials) == 1:
-                        # Only one number? It's likely the Total Price.
-                        r["data"]["total"] = financials[0]
-                        r["data"]["price"] = financials[0] / qty
+                    found_solution = False
+
+                    # Candidates to check: Identified small ints + Default [1]
+                    candidates_to_check = potential_qtys if potential_qtys else [1]
+                    if 1 not in candidates_to_check: candidates_to_check.append(1)
+
+                    for q in candidates_to_check:
+                        # 1. Additive Check (Profit + Cost = Total)
+                        # This works independent of Qty usually, but Total is the target.
+                        # If we find this, we trust the 'Total'.
+                        # Then we check if 'Price' * q = 'Total'.
                         
-                    elif len(financials) >= 2:
-                        # [Small, Large] -> [Profit, Total]? or [Price, Cost]?
-                        # Try to find Relationship: A * Qty = B
-                        
-                        # 1. Try Additive Relationship first (Profit + Cost = Total)
-                        # This generates the most confidence because it explains 3 numbers.
-                        found_additive = False
+                        # Let's run Additive First for ANY combination (independent of Qty)
                         if len(financials) >= 3:
                             for i in range(len(financials)):
                                 for j in range(len(financials)):
@@ -300,81 +276,96 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                                         B = financials[j]
                                         C = financials[k] # Potential Total
                                         
-                                        # Tolerance check for A + B = C
                                         if abs((A + B) - C) < 0.5:
-                                            # We found Profit + Cost = Total!
-                                            # Usually Cost > Profit, but not always.
-                                            # C is definitely Total.
+                                            # Found Cost + Profit = Total
                                             r["data"]["total"] = C
-                                            r["data"]["cost"] = max(A, B) # Assumption: Cost is usually larger than Profit
-                                            r["data"]["profit"] = min(A, B) 
+                                            r["data"]["cost"] = max(A, B)
+                                            r["data"]["profit"] = min(A, B)
+                                            found_solution = True
                                             
-                                            found_additive = True
-                                            
-                                            # The remaining number is likely "List Price"
+                                            # Now try to verify Qty with this Total
+                                            # Look for a Price such that Price * q = Total OR Price / q = item_price
+                                            # Remaining financials likely contain List Price
                                             remaining = [f for f in financials if f not in (A, B, C)]
+                                            
                                             if remaining:
                                                 r["data"]["price"] = remaining[0]
                                             else:
-                                                # If no List Price found, use Total/Qty (Net Price)
-                                                r["data"]["price"] = C / qty
+                                                r["data"]["price"] = C / q
+                                            
+                                            # Consolidate Qty
+                                            qty = q
                                             break
-                                    if found_additive: break
-                                if found_additive: break
+                                    if found_solution: break
+                                if found_solution: break
+                        
+                        if found_solution: break
 
-                        if not found_additive:
-                            # 2. Try Multiplicative Relationship (Price * Qty = Total)
-                            found_relation = False
+                        # 2. Multiplicative Check (Price * q = Total)
+                        # Only run if Additive didn't solve it already
+                        if len(financials) >= 2:
                             for i in range(len(financials)):
                                 for j in range(len(financials)):
                                     if i == j: continue
-                                    A = financials[i]
-                                    B = financials[j]
+                                    A = financials[i] # Price
+                                    B = financials[j] # Total
                                     
-                                    # Tolerance for float math (OCR noise)
-                                    if abs((A * qty) - B) < 0.5:
+                                    if abs((A * q) - B) < 0.5:
                                         r["data"]["price"] = A
                                         r["data"]["total"] = B
-                                        found_relation = True
+                                        qty = q
+                                        found_solution = True
                                         break
-                                if found_relation: break
-                            
-                            if not found_relation:
-                                # Fallback: Largest is Total.
-                                max_val = financials[-1]
-                                r["data"]["total"] = max_val
-                                
-                                if qty == 1:
-                                    r["data"]["price"] = max_val
-                                else:
-                                    r["data"]["price"] = max_val / qty
-                                
-                                # Fallback 2: Identify Cost / Profit from remainder
-                                remaining = [f for f in financials if f != r["data"].get("price") and f != r["data"].get("total")]
-                                remaining = sorted(list(set(remaining)))
-                                
-                                if remaining:
-                                    r["data"]["cost"] = remaining[-1]
-                                    if len(remaining) > 1:
-                                        r["data"]["profit"] = remaining[0]
+                                if found_solution: break
+                        
+                        if found_solution: break
 
-                    # C. Identify Stock (Secondary Small Integer)
-                    # We already picked one small int as 'qty'.
-                    # Any other small int in the row could be 'stock'.
-                    # Image shows 'Stock' column exists.
+                    
+                    # C. Finalize Qty & Cleanup
+                    r["data"]["qty"] = qty
+                    
+                    if qty in potential_qtys:
+                        # Convert token to 'used' visualization
+                        for c in row_candidates:
+                             if c["val"] == qty:
+                                 r["tokens"].append(c["t"])
+                                 break
+                    
+                    # D. Fallback (If no math worked)
+                    if not found_solution:
+                        # Default behavior:
+                        # If we have potential qtys, pick the first one (closest to barcode due to list order?)
+                        # Actually candidates are sorted by X.
+                        # Usually Qty is Leftmost or Immediately after Description/Barcode.
+                        # Let's pick the one closest to Barcode X-wise.
+                        
+                        if potential_qtys:
+                            # Re-find closest to barcode among small ints
+                            # row_candidates has 'dist'
+                            candidates_with_dist = [c for c in row_candidates if c["val"] in potential_qtys]
+                            if candidates_with_dist:
+                                candidates_with_dist.sort(key=lambda k: k["dist"]) # Close to barcode
+                                best_q_cand = candidates_with_dist[0]
+                                qty = best_q_cand["val"]
+                                r["data"]["qty"] = qty
+                                r["tokens"].append(best_q_cand["t"])
+                        
+                        # Assuming largest is Total
+                        if financials:
+                            r["data"]["total"] = financials[-1]
+                            r["data"]["price"] = financials[-1] / qty
+                            
+                            # Estimate Cost/Profit
+                            remaining = [f for f in financials if f != r["data"]["total"]]
+                            if remaining:
+                                 r["data"]["cost"] = remaining[-1] # Next largest
+                                 if len(remaining) > 1:
+                                     r["data"]["profit"] = remaining[0] # Smallest
+
+                    # E. Identify Stock (The OTHER small int)
                     potential_stocks = [n for n in nums if isinstance(n, int) and n < 1000 and n != r["data"].get("qty")]
                     if potential_stocks:
-                        # If multiple, picking one is hard.
-                        # Heuristic: Stock is usually AFTER Total or BEFORE Profit.
-                        # For now, just pick the first available one as best guess.
                          r["data"]["stock"] = potential_stocks[0]
-                    
-                    # Mark tokens as used
-                    for c in row_candidates:
-                        if c["val"] in financials:
-                             r["tokens"].append(c["t"])
-                             # extracted_data logic handles values, tokens just for viz/debug
-                             pass
 
             rows = []
             for r in robust_rows:
