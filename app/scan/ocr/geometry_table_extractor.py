@@ -83,19 +83,19 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                          current_row = [t]
                  rows.append(current_row)
         else:
-            # 🏗️ COLUMN-WISE RANK MATCHING (The "Zipper" Method)
-            # Curved paper destroys Global Y alignment.
-            # But Vertical Order within a column is preserved.
-            # 1. Detect Headers to find Column X-Bands
-            # 2. Sort tokens in each band by Y
-            # 3. Zip with Barcodes (Sorted by Y)
-            
+            # 🏗️ COLUMN-WISE ZIPPER + ROI CROPPING
+            # 1. Define Table Vertical Extent (ROI)
             barcodes.sort(key=lambda k: k["y"])
-            # Initialize rows with barcodes
-            # Structure: [ {barcode_token, 'extracted': {}} ]
-            robust_rows = [{"barcode": b, "tokens": [b], "data": {}} for b in barcodes]
+            table_top_y = barcodes[0]["y"] - 0.02
+            table_bottom_y = barcodes[-1]["y"] + 0.02
             
-            # 1. DETECT HEADERS & COLUMNS
+            print(f"✂️ TABLE ROI: Y {table_top_y:.3f} to {table_bottom_y:.3f}")
+
+            # Initialize rows
+            robust_rows = [{"barcode": b, "tokens": [b], "data": {}} for b in barcodes]
+            barcode_centers = {id(b): b["y"] for b in barcodes}
+            
+            # 2. DETECT HEADERS (Same as before)
             header_tokens = []
             for t in all_tokens:
                  txt = t["text"].strip().upper()
@@ -106,35 +106,27 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                  elif txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]: h_type = "profit"
                  elif txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]: h_type = "cost"
                  elif txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]: h_type = "stock"
-                 
                  if h_type:
                     header_tokens.append({"type": h_type, "x": t["x"], "x_min": t["x_min"], "x_max": t["x_max"]})
             
             col_zones = {}
             if header_tokens:
                 header_tokens.sort(key=lambda k: k["x"])
-                
-                # INFERENCE: If Price missing but Stock/Profit exists, inject Price
+                # Inference Logic (Virtual Price etc.)
                 types = {h["type"] for h in header_tokens}
                 if "price" not in types and "stock" in types:
-                     # Find stock index
                      idx = next(i for i, h in enumerate(header_tokens) if h["type"] == "stock")
-                     # Inject virtual price left of stock
                      avg_w = (header_tokens[0]["x_max"] - header_tokens[0]["x_min"])
                      virtual = {"type": "price", "x": header_tokens[idx]["x"] - 0.1, "x_min": header_tokens[idx]["x_min"] - 0.1, "x_max": header_tokens[idx]["x_min"] - 0.02}
                      header_tokens.insert(idx, virtual)
 
                 for i, h in enumerate(header_tokens):
-                    # Define Band Widths (Midpoint to Midpoint)
-                    if i == 0: start = max(0.25, h["x_min"] - 0.15) # Start after barcode area
+                    if i == 0: start = max(0.25, h["x_min"] - 0.15) 
                     else: start = (header_tokens[i-1]["x_max"] + h["x_min"]) / 2
-                    
                     if i == len(header_tokens) - 1: end = 1.0
                     else: end = (h["x_max"] + header_tokens[i+1]["x_min"]) / 2
-                    
                     col_zones[h["type"]] = (start, end)
             else:
-                 # Fallback: Default Percentages if no headers found
                  print("⚠️ NO HEADERS FOUND. USING DEFAULT ZONES.")
                  col_zones = {
                      "qty": (0.45, 0.50),
@@ -145,103 +137,68 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                      "cost": (0.80, 1.0)
                  }
 
-            print("📐 COLUMN BANDS (ZIPPER MODE):", col_zones)
+            print("📐 COLUMN BANDS:", col_zones)
 
-            # 2. BUCKET & SORT
-            # For each column type, find ALL tokens in that X-band
+            # 3. FILL COLUMNS WITH CROPPED TOKENS
             for col_type, (x_start, x_end) in col_zones.items():
                 col_tokens = []
                 for t in others:
-                    # Filter logic: Numeric only usually? Or allow text for Qty?
-                    # Let's take strict Numerics for Money columns
+                    # ROI CHECK: Discard headers/footers
+                    if not (table_top_y <= t["y"] <= table_bottom_y):
+                        continue
+                    
                     val = _parse_number(t["text"])
                     if val is not None:
-                         # Exclude barcode-like numbers > 100000
                          if val > 1000000: continue 
-
                          if x_start <= t["x"] <= x_end:
                              col_tokens.append({"t": t, "val": val})
                 
-                # Sort this column's tokens by Y (Top to Bottom)
+                # Sort Top-to-Bottom
                 col_tokens.sort(key=lambda k: k["t"]["y"])
                 
-                # 3. ZIP INTO ROWS
-                # Match 1-to-1 with Barcodes
-                # If counts match perfectly, it's a guaranteed match
-                # If not, use Nearest Rank?
+                print(f"   📌 Column {col_type}: Found {len(col_tokens)} items (Post-Crop) vs {len(barcodes)} rows.")
                 
-                print(f"   📌 Column {col_type}: Found {len(col_tokens)} items vs {len(barcodes)} rows.")
+                # 4. ASSIGNMENT STRATEGY
+                # Strategy A: Perfect Zip (Count Match)
+                if len(col_tokens) == len(barcodes):
+                    for i, r in enumerate(robust_rows):
+                        r["data"][col_type] = col_tokens[i]["val"]
+                        r["tokens"].append(col_tokens[i]["t"])
                 
-                # Simple Zip if counts are close or equal
-                # If we have EQUAL or FEWER tokens than rows, we map i-th token to i-th row?
-                # No, what if Row 1 is missing a value? Row 2's value will map to Row 1.
-                # Use Y-Alignment Check to be safe.
-                
-                # Map each token to the row at the same "Relative Height Ranking"
-                # Actually, simply checking "Is this token roughly at the same Y as the Barcode?" is safer than pure Zip if gaps exist.
-                # But we are doing this because Y is unreliable globally.
-                # OK, let's allow a larger Y-tolerance for "Same Row" check.
-                
-                col_idx = 0
-                for i, row_data in enumerate(robust_rows):
-                    b = row_data["barcode"]
-                    
-                    # Try to find a token in col_tokens that matches this barcode's Y roughly
-                    # But prioritize ORDER.
-                    
-                    if col_idx < len(col_tokens):
-                        cand = col_tokens[col_idx]
+                # Strategy B: Mismatch - Use "Nearest Y Rank"
+                # If we have missing values (e.g. empty cells) or extra noise inside the table
+                else:
+                    assigned_indices = set()
+                    for r in robust_rows:
+                        b_y = r["barcode"]["y"]
+                        best_idx = None
+                        min_dist_y = 0.04 # Max vertical skew tolerance (4% of page)
                         
-                        # Validate Y-Alignment loosely
-                        # Curve is usually monotonic.
-                        # Difference shouldn't be massive (e.g. > 10% height)
-                        if abs(cand["t"]["y"] - b["y"]) < 0.10: # 10% tolerance!
-                            row_data["data"][col_type] = cand["val"]
-                            row_data["tokens"].append(cand["t"])
-                            col_idx += 1
-                        else:
-                            # Token seems too far. Maybe this row has no value for this column.
-                            # Or maybe the token belongs to a later row.
-                            # If token is HIGHER (smaller Y) than barcode?
-                            if cand["t"]["y"] < b["y"] - 0.10:
-                                # Token is way above. Skip it (belongs to header?)
-                                col_idx += 1
-                                # Retry check with next token?
-                                if col_idx < len(col_tokens):
-                                    cand = col_tokens[col_idx]
-                                    if abs(cand["t"]["y"] - b["y"]) < 0.10:
-                                        row_data["data"][col_type] = cand["val"]
-                                        row_data["tokens"].append(cand["t"])
-                                        col_idx += 1
-                                pass
+                        for i, c in enumerate(col_tokens):
+                            if i in assigned_indices: continue
+                            
+                            dist = abs(c["t"]["y"] - b_y)
+                            if dist < min_dist_y:
+                                min_dist_y = dist
+                                best_idx = i
+                        
+                        if best_idx is not None:
+                            r["data"][col_type] = col_tokens[best_idx]["val"]
+                            r["tokens"].append(col_tokens[best_idx]["t"])
+                            assigned_indices.add(best_idx)
 
-            # Reconstruct 'rows' list
             rows = []
             for r in robust_rows:
-                # We attach the 'data' dict to the first token (barcode) for fallback extraction to find
-                # Actually, the Next Step (Heuristic) will try to re-parse.
-                # We should disable the Heuristic if we used Zipper?
-                # Or just put tokens in 'row' and let Heuristic run?
-                # Heuristic uses 'unused_numbers'. 
-                # Let's attach our found values to the row tokens so the next step can find them?
-                # Better: Let's just output the rows populated with tokens.
-                # Our Heuristic step (Step 4) ignores zones and recalculates.
-                # That will UNDO our work if we are not careful.
-                # We need to explicitly modify the Heuristic Step to respect our `data` result.
-                # Or just construct the row such that the Heuristic naturally works?
-                # No, Heuristic is blind.
-                
-                # Let's inject a special attribute into the row tokens? No.
-                # Let's Skip Step 4? 
-                
                 rows.append(r["tokens"])
-                
-                # CRITICAL: We need to pass the `r["data"]` to the final object construction.
-                # Since `rows` is just a list of tokens...
-                # We will hack it: Attach `_extracted_data` to the barcode token object.
                 r["barcode"]["_extracted_data"] = r["data"]
 
-            print(f"🧩 ZIPPER MODE: Created {len(rows)} rows with pre-mapped column data.")
+            print(f"🧩 EXTRACTED {len(rows)} ROWS.")
+
+        # 3️⃣ NO-OP HEADERS
+        
+        # 4️⃣ PARSER LOOP
+        # ... (Next block handles parsing) ...
+
 
         # 3️⃣ SKIP HEADERS 
         # (Already used them in Zipper)
