@@ -298,6 +298,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
 
                         if not found_additive:
                             # 2. Try Multiplicative Relationship (Price * Qty = Total)
+                            found_relation = False
                             for i in range(len(financials)):
                                 for j in range(len(financials)):
                                     if i == j: continue
