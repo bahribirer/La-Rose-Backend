@@ -72,92 +72,92 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                  rows.append(current_row)
         else:
 
-    # 🏗️ SKEW CORRECTION (Holistic Rotation)
-    import math
-    
-    # 1. Calculate Skew Angle from Headers 
-    # Use headers because they span the full width and form a line
-    header_tokens_raw = []
-    for t in all_tokens:
-         txt = t["text"].strip().upper()
-         if txt in ["BARKOD", "URUN ADI", "ÜRÜN ADI", "MIKTAR", "ADET", "NET SATIŞ", "TUTAR", "TOPLAM"]:
-             header_tokens_raw.append(t)
-    
-    rotation_angle = 0.0
-    if len(header_tokens_raw) > 2:
-        # Simple Linear Regression: y = mx + c
-        # slope m ~ tan(angle)
-        avg_x = sum(t["x"] for t in header_tokens_raw) / len(header_tokens_raw)
-        avg_y = sum(t["y"] for t in header_tokens_raw) / len(header_tokens_raw)
-        
-        numerator = sum((t["x"] - avg_x) * (t["y"] - avg_y) for t in header_tokens_raw)
-        denominator = sum((t["x"] - avg_x) ** 2 for t in header_tokens_raw)
-        
-        if denominator != 0:
-            slope = numerator / denominator
-            rotation_angle = math.atan(slope)
-            print(f"🔄 DETECTED SKEW ANGLE: {math.degrees(rotation_angle):.2f} degrees")
+            # 🏗️ SKEW CORRECTION (Holistic Rotation)
+            import math
+            
+            # 1. Calculate Skew Angle from Headers 
+            # Use headers because they span the full width and form a line
+            header_tokens_raw = []
+            for t in all_tokens:
+                 txt = t["text"].strip().upper()
+                 if txt in ["BARKOD", "URUN ADI", "ÜRÜN ADI", "MIKTAR", "ADET", "NET SATIŞ", "TUTAR", "TOPLAM"]:
+                     header_tokens_raw.append(t)
+            
+            rotation_angle = 0.0
+            if len(header_tokens_raw) > 2:
+                # Simple Linear Regression: y = mx + c
+                # slope m ~ tan(angle)
+                avg_x = sum(t["x"] for t in header_tokens_raw) / len(header_tokens_raw)
+                avg_y = sum(t["y"] for t in header_tokens_raw) / len(header_tokens_raw)
+                
+                numerator = sum((t["x"] - avg_x) * (t["y"] - avg_y) for t in header_tokens_raw)
+                denominator = sum((t["x"] - avg_x) ** 2 for t in header_tokens_raw)
+                
+                if denominator != 0:
+                    slope = numerator / denominator
+                    rotation_angle = math.atan(slope)
+                    print(f"🔄 DETECTED SKEW ANGLE: {math.degrees(rotation_angle):.2f} degrees")
 
-    # 2. Rotate All Tokens
-    # Center of rotation doesn't matter much for relative alignment, use (0.5, 0.5)
-    cx, cy = 0.5, 0.5
-    cos_a = math.cos(-rotation_angle)
-    sin_a = math.sin(-rotation_angle)
-    
-    rotated_tokens = []
-    for t in all_tokens:
-        # Translate to origin
-        tx = t["x"] - cx
-        ty = t["y"] - cy
-        
-        # Rotate
-        rx = tx * cos_a - ty * sin_a
-        ry = tx * sin_a + ty * cos_a
-        
-        # Translate back
-        new_x = rx + cx
-        new_y = ry + cy
-        
-        # Clone token with new coords
-        new_t = t.copy()
-        new_t["x"] = new_x
-        new_t["y"] = new_y
-        new_t["x_min"] = t["x_min"] # Approx
-        new_t["x_max"] = t["x_max"] # Approx
-        rotated_tokens.append(new_t)
-        
-    # USE ROTATED TOKENS FOR GEOMETRY
-    all_tokens = rotated_tokens
-    
-    # Re-identify types
-    barcodes = []
-    others = []
-    for t in all_tokens:
-        txt = t["text"]
-        if txt.isdigit() and len(txt) == 13:
-            barcodes.append(t)
-        else:
-            others.append(t)
+            # 2. Rotate All Tokens
+            # Center of rotation doesn't matter much for relative alignment, use (0.5, 0.5)
+            cx, cy = 0.5, 0.5
+            cos_a = math.cos(-rotation_angle)
+            sin_a = math.sin(-rotation_angle)
+            
+            rotated_tokens = []
+            for t in all_tokens:
+                # Translate to origin
+                tx = t["x"] - cx
+                ty = t["y"] - cy
+                
+                # Rotate
+                rx = tx * cos_a - ty * sin_a
+                ry = tx * sin_a + ty * cos_a
+                
+                # Translate back
+                new_x = rx + cx
+                new_y = ry + cy
+                
+                # Clone token with new coords
+                new_t = t.copy()
+                new_t["x"] = new_x
+                new_t["y"] = new_y
+                new_t["x_min"] = t["x_min"] # Approx
+                new_t["x_max"] = t["x_max"] # Approx
+                rotated_tokens.append(new_t)
+                
+            # USE ROTATED TOKENS FOR GEOMETRY
+            all_tokens = rotated_tokens
+            
+            # Re-identify types
+            barcodes = []
+            others = []
+            for t in all_tokens:
+                txt = t["text"]
+                if txt.isdigit() and len(txt) == 13:
+                    barcodes.append(t)
+                else:
+                    others.append(t)
 
-    rows = []
+            rows = []
 
-    if not barcodes:
-        print("⚠️ NO BARCODES FOUND IN GEOMETRY MODE (POST-ROTATION).")
-        # (Fallback Logic omitted for brevity, usually barcodes exist)
-    else:
-        # 🏗️ ZONE-RESTRICTED NEAREST NEIGHBOR ("Column Magnet")
-        # Now working on STRAIGHTENED coordinates.
+            if not barcodes:
+                print("⚠️ NO BARCODES FOUND IN GEOMETRY MODE (POST-ROTATION).")
+                # (Fallback Logic omitted for brevity, usually barcodes exist)
+            else:
+                # 🏗️ ZONE-RESTRICTED NEAREST NEIGHBOR ("Column Magnet")
+                # Now working on STRAIGHTENED coordinates.
 
-        barcodes.sort(key=lambda k: k["y"])
-        
-        # Initialize rows
-        robust_rows = [{"barcode": b, "tokens": [b], "data": {}} for b in barcodes]
-        
-        # 1. DETECT HEADERS (Expanded)
-        header_tokens = []
-        for t in all_tokens:
-                txt = t["text"].strip().upper()
-                h_type = None
+                barcodes.sort(key=lambda k: k["y"])
+                
+                # Initialize rows
+                robust_rows = [{"barcode": b, "tokens": [b], "data": {}} for b in barcodes]
+                
+                # 1. DETECT HEADERS (Expanded)
+                header_tokens = []
+                for t in all_tokens:
+                        txt = t["text"].strip().upper()
+                        h_type = None
 
                  if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET", "SATILAN"]: h_type = "qty"
                  elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI", "SATIŞ TUTARI", "TUTAR"]: h_type = "total"
