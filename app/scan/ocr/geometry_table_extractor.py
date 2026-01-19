@@ -71,7 +71,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                          current_row = [t]
                  rows.append(current_row)
         else:
-        else:
+
             # 🏗️ ZONE-RESTRICTED NEAREST NEIGHBOR ("Column Magnet")
             # 1. Define Column Zones based on Headers
             # 2. For each Barcode, find the closest token in each zone vertically.
