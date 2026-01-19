@@ -60,7 +60,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
         
         if not barcodes:
             print("⚠️ NO BARCODES FOUND IN GEOMETRY MODE. FALLING BACK TO BLIND LINE CLUSTERING.")
-            # Fallback to previous logic
+            # Fallback
             all_tokens.sort(key=lambda k: k["y"])
             if all_tokens:
                  current_row = [all_tokens[0]]
@@ -72,46 +72,52 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                          current_row = [t]
                  rows.append(current_row)
         else:
-            # We have barcodes. Create a row for each.
+            # 🏗️ CLUSTER-THEN-ASSIGN STRATEGY
+            # 1. Cluster non-barcode tokens into visual lines first
+            others.sort(key=lambda k: k["y"])
+            text_lines = []
+            if others:
+                current_line = [others[0]]
+                # 0.01 is roughly 1% of page height. Valid for single spacing.
+                for t in others[1:]:
+                    last_y = (current_line[-1]["obj"].layout.bounding_poly.normalized_vertices[0].y + current_line[-1]["obj"].layout.bounding_poly.normalized_vertices[2].y) / 2
+                    curr_y = (t["obj"].layout.bounding_poly.normalized_vertices[0].y + t["obj"].layout.bounding_poly.normalized_vertices[2].y) / 2
+                    
+                    if abs(curr_y - last_y) < 0.015: # 1.5% tolerance for line grouping
+                        current_line.append(t)
+                    else:
+                        text_lines.append(current_line)
+                        current_line = [t]
+                text_lines.append(current_line)
+
+            # 2. Assign each Text Line to the nearest Barcode
+            # Since barcodes define the "True Rows"
             barcodes.sort(key=lambda k: k["y"])
             row_map = {id(b): [b] for b in barcodes}
             
-            # 📏 MIDPOINT SLICING (Sort Hat Logic)
-            # Dividing the page into horizontal strips based on barcode positions
-            # This is robust against curve/tilt because it uses the relative order of barcodes
-            slice_boundaries = []
-            for i in range(len(barcodes)):
-                b_curr = barcodes[i]
-                bid = id(b_curr)
+            for line in text_lines:
+                # Calculate avg Y of the line
+                y_sum = 0
+                for t in line:
+                    y_sum += (t["obj"].layout.bounding_poly.normalized_vertices[0].y + t["obj"].layout.bounding_poly.normalized_vertices[2].y) / 2
+                line_y = y_sum / len(line)
                 
-                # Top Boundary
-                if i == 0:
-                    top = 0.0
-                else:
-                    b_prev = barcodes[i-1]
-                    top = (b_prev["y"] + b_curr["y"]) / 2
+                # Find nearest barcode
+                best_bid = None
+                min_dist = 999.0
                 
-                # Bottom Boundary
-                if i == len(barcodes) - 1:
-                    bottom = 1.0
-                else:
-                    b_next = barcodes[i+1]
-                    bottom = (b_curr["y"] + b_next["y"]) / 2
+                for b in barcodes:
+                    b_y = (b["obj"].layout.bounding_poly.normalized_vertices[0].y + b["obj"].layout.bounding_poly.normalized_vertices[2].y) / 2
+                    dist = abs(line_y - b_y)
                     
-                slice_boundaries.append((bid, top, bottom))
-
-            # Assign other tokens to their slice
-            for t in others:
-                y = t["y"]
-                assigned = False
-                for bid, top, bottom in slice_boundaries:
-                    if top <= y < bottom:
-                        row_map[bid].append(t)
-                        assigned = True
-                        break
+                    # Optimization: Only link if within reasonable distance (e.g. 5% page height)
+                    # Prevents header/footer from attaching to top/bottom rows randomly
+                    if dist < 0.05 and dist < min_dist:
+                        min_dist = dist
+                        best_bid = id(b)
                 
-                # If unassigned (should be impossible with 0.0-1.0 coverage), pass
-                pass
+                if best_bid:
+                    row_map[best_bid].extend(line)
 
             # Convert map to list of rows
             for b in barcodes:
@@ -119,7 +125,7 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 r.sort(key=lambda k: k["x"]) 
                 rows.append(r)
 
-            print(f"🧩 BARCODE SLICING MODE: Created {len(rows)} robust rows via MIDPOINT CUTS.")
+            print(f"🧩 BARCODE LINE-CLUSTERING MODE: Created {len(rows)} robust rows.")
 
         # 3️⃣ Detect Headers & Define DISJOINT Column Zones
         header_tokens = []
