@@ -80,11 +80,11 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
             lines = []
             if all_tokens:
                 curr_line = [all_tokens[0]]
-                curr_y_sum = (all_tokens[0]["y_min"] + all_tokens[0]["y_max"]) / 2
+                curr_y_sum = all_tokens[0]["y"]
                 curr_count = 1
                 
                 for t in all_tokens[1:]:
-                    t_center = (t["y_min"] + t["y_max"]) / 2
+                    t_center = t["y"]
                     avg_y = curr_y_sum / curr_count
                     
                     # If token center is within 1.5% height of line average -> Same Line
