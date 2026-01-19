@@ -122,8 +122,15 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 new_t = t.copy()
                 new_t["x"] = new_x
                 new_t["y"] = new_y
-                new_t["x_min"] = t["x_min"] # Approx
-                new_t["x_max"] = t["x_max"] # Approx
+                
+                # Recalculate Min/Max based on new center and original width
+                # This fixes the "Inverted Zones" bug where sorted X disagreed with old X_min/max
+                w = t.get("x_max", t["x"]) - t.get("x_min", t["x"])
+                if w < 0: w = 0 # Safety
+                
+                new_t["x_min"] = new_x - (w / 2)
+                new_t["x_max"] = new_x + (w / 2)
+                
                 rotated_tokens.append(new_t)
                 
             # USE ROTATED TOKENS FOR GEOMETRY
