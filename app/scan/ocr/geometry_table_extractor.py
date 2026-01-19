@@ -71,52 +71,79 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                          current_row = [t]
                  rows.append(current_row)
         else:
-            # 🏗️ ROBUST LINE CLUSTERING (The "Human Eye" Method)
-            # Instead of complex slicing, just group things that "look like a line"
-            # 1. Sort all tokens by Y
-            all_tokens.sort(key=lambda k: k["y"])
+        else:
+            # 🏗️ NEAREST NEIGHBOR VERTICAL ASSIGNMENT (The "Magnet" Method)
+            # The previous method merged everything into one line because Y-clustering was too aggressive.
+            # Now, we treat each Barcode as a "Magnet". 
+            # Every other token snaps to the Barcode that is vertically closest to it.
             
-            # 2. Cluster into lines based on Y-center proximity
-            lines = []
-            if all_tokens:
-                curr_line = [all_tokens[0]]
-                curr_y_sum = all_tokens[0]["y"]
-                curr_count = 1
+            barcodes.sort(key=lambda k: k["y"])
+            row_map = {id(b): [b] for b in barcodes}
+            
+            # Pre-calculate barcode Y-centers
+            barcode_centers = {}
+            for b in barcodes:
+                barcode_centers[id(b)] = b["y"]
+
+            print(f"🧲 MAGNET MODE: Assigning tokens to {len(barcodes)} barcodes...")
+
+            for t in others:
+                t_y = t["y"]
                 
-                for t in all_tokens[1:]:
-                    t_center = t["y"]
-                    avg_y = curr_y_sum / curr_count
+                # Find closest barcode
+                best_bid = None
+                min_dist = 999.0
+                
+                for b in barcodes:
+                    bid = id(b)
+                    b_y = barcode_centers[bid]
+                    dist = abs(t_y - b_y)
                     
-                    # If token center is within 1.5% height of line average -> Same Line
-                    # 0.015 is roughly 5-10 pixels on 1000px image, good for single spacing
-                    if abs(t_center - avg_y) < 0.02: 
-                        curr_line.append(t)
-                        curr_y_sum += t_center
-                        curr_count += 1
-                    else:
-                        lines.append(curr_line)
-                        curr_line = [t]
-                        curr_y_sum = t_center
-                        curr_count = 1
-                lines.append(curr_line) # Last line
-
-            # 3. Filter for Lines with Barcodes
-            # A line is valid ONLY if it contains a 13-digit barcode
-            print(f"📊 FOUND {len(lines)} VISUAL LINES. CHECKING FOR BARCODES...")
-            
-            for line in lines:
-                line_barcodes = [t for t in line if t["text"].isdigit() and len(t["text"]) == 13]
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_bid = bid
                 
-                if line_barcodes:
-                    # This is a valid product row!
-                    # Sort by X to read left-to-right
-                    line.sort(key=lambda k: k["x"])
-                    rows.append(line)
-            
-            print(f"🧩 BARCODE LINE MODE: Identified {len(rows)} valid product rows from visual lines.")
+                # THRESHOLD: If the closest barcode is too far away (e.g. > 4% of page), 
+                # then this token is probably a header/footer or noise.
+                if best_bid and min_dist < 0.04:
+                    row_map[best_bid].append(t)
+                else:
+                    # Token is orphaned (Header/Footer)
+                    pass
 
-        # 3️⃣ SKIP HEADERS - WE TRUST THE ROW CONTENT
-        col_zones = {} # We don't use zones anymore, we use row logic.
+            # Convert map to list of rows
+            for b in barcodes:
+                r = row_map[id(b)]
+                # Sort separated row by X (Left-to-Right)
+                r.sort(key=lambda k: k["x"]) 
+                rows.append(r)
+
+            print(f"🧩 BARCODE MAGNET MODE: Created {len(rows)} robust rows.")
+
+        # 3️⃣ Detect Headers (Keep for Reference)
+        col_zones = {} 
+        header_tokens = []
+        for t in all_tokens:
+             txt = t["text"].strip().upper()
+             h_type = None
+             if txt in ["ADET", "MIKTAR", "SAT.AD", "SAT. AD", "S.ADET", "SATILAN"]: h_type = "qty"
+             elif txt in ["TUTAR", "TUTARI", "TOPLAM", "GENEL TOPLAM", "SATIS TUTARI"]: h_type = "total"
+             elif txt in ["FIYAT", "FİYAT", "FIYATI", "BIRIM", "BİRİM FİYAT", "B.FİYAT", "S.FIYAT", "S.FİYAT", "SATIS F.", "SATIŞ F.", "PER. SAT.", "P.SATIS", "ETIKET", "ETİKET"]: h_type = "price"
+             elif txt in ["KAR", "KÂR", "KAZANÇ", "ECZ.KAR", "ECZ KAR", "ECZ. KÂR"]: h_type = "profit"
+             elif txt in ["MALİYET", "MALIYET", "ALIŞ", "ALIS", "GELİŞ", "GELIS"]: h_type = "cost"
+             elif txt in ["STOK", "STOK MIK.", "STOK MİK.", "MEVCUT", "KALAN", "ELDEKİ"]: h_type = "stock"
+             if h_type:
+                header_tokens.append({"type": h_type, "x": t["x"], "x_min": t["x_min"], "x_max": t["x_max"]})
+        
+        if header_tokens:
+            header_tokens.sort(key=lambda k: k["x"])
+            for i, h in enumerate(header_tokens):
+                if i == 0: start = max(0.20, h["x_min"] - 0.10) 
+                else: start = (header_tokens[i-1]["x_max"] + h["x_min"]) / 2
+                if i == len(header_tokens) - 1: end = 1.0
+                else: end = (h["x_max"] + header_tokens[i+1]["x_min"]) / 2
+                col_zones[h["type"]] = (start, end)
+
 
 
         # 4️⃣ Extract Data from Rows using Column Zones (STRICT MODE + WIDEST SCOPE FALLBACK)
