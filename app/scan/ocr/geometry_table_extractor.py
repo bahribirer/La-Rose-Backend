@@ -161,29 +161,52 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
 
                 used_token_ids = set()
 
+                # 1. PRE-COMPUTE CANDIDATES & IDENTIFY GLOBAL NOISE
+                # Common headers/footers (like "18/07/2024" or Invoice ID "12345") might be picked up in every row.
+                # We need to filter them out if they appear too frequently.
+                from collections import defaultdict
+                global_number_counts = defaultdict(int)
+                
                 for r in robust_rows:
                     b_y = r["barcode"]["y"]
                     b_x = r["barcode"]["x"]
                     
-                    # 1. Gather Candidates (Vertical Proximity)
-                    # Look for numbers roughly on the same line (Y +/- 2.5%)
                     row_candidates = []
                     for t in others:
-                        if id(t) in used_token_ids: continue
-                        
                         # Y-Distance Check
                         if abs(t["y"] - b_y) < 0.025:
-                            # Parse Value
                             val = _parse_number(t["text"])
                             if val is not None:
-                                # Distance from Barcode (for breaking ties later)
                                 dist = abs(t["x"] - b_x)
                                 row_candidates.append({"t": t, "val": val, "dist": dist})
-
-                    # Sort by X-coordinate (Left-to-Right reading order)
+                                global_number_counts[val] += 1
+                    
+                    # Sort candidates by X
                     row_candidates.sort(key=lambda k: k["t"]["x"])
+                    r["temp_candidates"] = row_candidates
 
-                    # 2. Semantic Solve
+                # Identify Blacklist (Repeating Numbers)
+                # If a number appears in > 3 rows OR > 50% of rows (if rows > 2)
+                # Exception: Small integers < 50 (Quantity often repeats 1, 1, 1...)
+                blacklist = set()
+                total_rows = len(robust_rows)
+                threshold = 3 
+                if total_rows > 5:
+                    threshold = max(3, total_rows * 0.4)
+                
+                for val, count in global_number_counts.items():
+                    # Allow small integers (Qty) to repeat
+                    if (isinstance(val, int) or val.is_integer()) and val < 50:
+                        continue
+                    if count > threshold:
+                        print(f"🔇 GLOBAL NOISE FILTER: Ignoring repeating value {val} (found in {count} rows)")
+                        blacklist.add(val)
+
+                # 2. RUN SEMANTIC SOLVER
+                for r in robust_rows:
+                    # Filter candidates
+                    row_candidates = [c for c in r["temp_candidates"] if c["val"] not in blacklist and id(c["t"]) not in used_token_ids]
+                    
                     # We have a bag of numbers: e.g. [1, 792.0, 884.28]
                     # Goal: Assign Qty, Price, Total, Cost, Profit etc.
                     
@@ -267,13 +290,16 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                             else:
                                 # Estimate Unit Price
                                 r["data"]["price"] = max_val / qty
-
-                            # Identify Cost / Profit from remainder
-                            remaining = [f for f in financials if f != max_val]
+                            
+                            # Fallback 2: Identify Cost / Profit from remainder
+                             # E.g. [Profit, Cost] -> Cost is usually larger > Profit (but smaller than Price/Total ideally)
+                            remaining = [f for f in financials if f != r["data"].get("price") and f != r["data"].get("total")]
+                            
+                            # Deduplicate (e.g. if Price=Total, don't double count)
+                            remaining = sorted(list(set(remaining)))
+                            
                             if remaining:
-                                # E.g. [Profit, Cost] -> Cost is usually larger > Profit
-                                # So largest remaining is Cost.
-                                remaining.sort()
+                                # Likely Cost is the largest remaining
                                 r["data"]["cost"] = remaining[-1]
                                 if len(remaining) > 1:
                                     r["data"]["profit"] = remaining[0]
