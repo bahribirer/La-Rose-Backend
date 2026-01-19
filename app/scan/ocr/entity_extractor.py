@@ -10,6 +10,7 @@ def extract_items_from_entities(document) -> List[DocumentLineItem]:
     
     # Check if document has entities
     if not hasattr(document, "entities") or not document.entities:
+        print("⚠️ DOCUMENT HAS NO ENTITIES (Custom Processor returned 0 entities)")
         return []
 
     print(f"🧩 FOUND {len(document.entities)} ENTITIES")
