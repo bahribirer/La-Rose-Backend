@@ -33,12 +33,22 @@ class ProductTotalStrategy(ReportStrategy):
         print("🟢 Using ProductTotalStrategy (HYBRID MODE)")
 
         # ==================================================
-        # 1️⃣ TABLE MODE – DOCUMENT OCR
+        # 0️⃣ ENTITY MODE (CUSTOM PROCESSOR) - 🚀 PRIORITY
         # ==================================================
-        table_items = extract_table_items(document)
+        from app.scan.ocr.entity_extractor import extract_items_from_entities
+        entity_items = extract_items_from_entities(document)
+        
+        if entity_items:
+            print(f"🚀 ENTITY ITEMS FOUND (CUSTOM AI): {len(entity_items)}")
+            table_items = entity_items
+        else:
+            # ==================================================
+            # 1️⃣ TABLE MODE – DOCUMENT OCR (FALLBACK)
+            # ==================================================
+            table_items = extract_table_items(document)
 
-        if table_items:
-            print(f"📊 TABLE ITEMS FOUND (OCR): {len(table_items)}")
+            if table_items:
+                print(f"📊 TABLE ITEMS FOUND (OCR): {len(table_items)}")
 
         # ==================================================
         # 2️⃣ GEOMETRY MODE (MANUAL RECONSTRUCTION)
