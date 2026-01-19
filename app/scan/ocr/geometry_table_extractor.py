@@ -352,49 +352,10 @@ def extract_items_by_geometry(document) -> List[DocumentLineItem]:
                 if val > 1000000:
                     continue
 
-                matched_zone = False
-                
-                # Check Zones First (Legacy Fallback)
-                if "qty" in col_zones and exact_qty is None:
-                    if col_zones["qty"][0] <= t_center <= col_zones["qty"][1]:
-                        if (isinstance(val, int) or (isinstance(val, float) and val.is_integer())):
-                             if val < 50:
-                                exact_qty = int(val)
-                                matched_zone = True
-                
-                
-                if "total" in col_zones:
-                    if col_zones["total"][0] <= t_center <= col_zones["total"][1]:
-                        if exact_total is None:
-                            exact_total = val
-                            matched_zone = True
-
-                if "price" in col_zones:
-                    if col_zones["price"][0] <= t_center <= col_zones["price"][1]:
-                        if exact_price is None:
-                            exact_price = val
-                            matched_zone = True
-
-                if "profit" in col_zones:
-                    if col_zones["profit"][0] <= t_center <= col_zones["profit"][1]:
-                        if exact_profit is None:
-                            exact_profit = val
-                            matched_zone = True
-
-                if "cost" in col_zones:
-                    if col_zones["cost"][0] <= t_center <= col_zones["cost"][1]:
-                        if exact_cost is None:
-                            exact_cost = val
-                            matched_zone = True
-                        
-                if "stock" in col_zones:
-                     if col_zones["stock"][0] <= t_center <= col_zones["stock"][1]:
-                        if exact_stock is None:
-                            exact_stock = int(val)
-                            matched_zone = True
-                
-                if not matched_zone:
-                    unused_numbers.append(val)
+                # Collect all numbers for Heuristic Mapper (Fallback)
+                # But don't duplicate if already extracted by Semantic Solver
+                if val not in [exact_qty, exact_total, exact_price, exact_cost, exact_profit, exact_stock, exact_net_total]:
+                     unused_numbers.append(val)
             
             # 5️⃣ SMART MAP LOGIC (Fallback or Enhancement)
             # If explicit zones failed or we want to double check against "all numbers found"
