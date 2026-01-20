@@ -43,7 +43,8 @@ def parse_table_line(item):
     item.raw_prices = []
     item.quantity = None
     item.quantity_candidates = []
-    item.barcode = None
+    if not item.barcode:
+        item.barcode = None
 
     # BARCODE
     for token in item.tokens:
