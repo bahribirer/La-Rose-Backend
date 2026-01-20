@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     # 🔐 Secrets
     OPENAI_API_KEY: str
+    GROQ_API_KEY: str                        # 🚀 Groq / Llama 3
     GOOGLE_APPLICATION_CREDENTIALS: str      # Document AI
     FIREBASE_CREDENTIALS_PATH: str           # 🔥 Firebase Admin
 

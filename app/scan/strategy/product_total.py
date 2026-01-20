@@ -33,7 +33,7 @@ class ProductTotalStrategy(ReportStrategy):
         print("🟢 Using ProductTotalStrategy (HYBRID MODE)")
 
         # ==================================================
-        # 0️⃣ ENTITY MODE (CUSTOM PROCESSOR) - 🚀 PRIORITY
+        # 0️⃣ ENTITY MODE (CUSTOM PROCESSOR) - 🚀 PRIORITY 1
         # ==================================================
         from app.scan.ocr.entity_extractor import extract_items_from_entities
         entity_items = extract_items_from_entities(document)
@@ -43,12 +43,74 @@ class ProductTotalStrategy(ReportStrategy):
             table_items = entity_items
         else:
             # ==================================================
-            # 1️⃣ TABLE MODE – DOCUMENT OCR (FALLBACK)
+            # 0.5️⃣ GROQ MODE (LLM REFINEMENT) - 🧠 PRIORITY 2
             # ==================================================
-            table_items = extract_table_items(document)
+            # If Custom Entities fail, try Llama 3 on Raw Text
+            from app.scan.ocr.groq_refiner import process_text_adaptive
+            
+            print("🧠 ATTEMPTING GROQ LLM REFINEMENT...")
+            try:
+                groq_data = process_text_adaptive(document.text)
+                
+                if groq_data and "urunler" in groq_data and groq_data["urunler"]:
+                    print(f"✅ GROQ RETURNED {len(groq_data['urunler'])} ITEMS")
+                    
+                    # Convert Groq JSON to DocumentLineItem
+                    from app.scan.models.document_line_item import DocumentLineItem
+                    
+                    groq_line_items = []
+                    for p in groq_data["urunler"]:
+                        # Map dynamic keys to fixed schema
+                        # Normalize keys to lowercase
+                        p_norm = {k.lower(): v for k, v in p.items()}
+                        
+                        barcode = p_norm.get("barkod")
+                        if not barcode: continue # Mandatory
+                        
+                        item = DocumentLineItem(raw_text=str(p), confidence=0.99)
+                        item.barcode = barcode
+                        
+                        # Helper helpers
+                        def to_float(x):
+                            if not x: return 0.0
+                            if isinstance(x, (float, int)): return float(x)
+                            # Clean string: "1.234,50" -> 1234.50
+                            clean = str(x).replace("TL", "").replace("₺", "").strip()
+                            if "," in clean and "." in clean:
+                                if clean.find(",") > clean.find("."): clean = clean.replace(".", "").replace(",", ".")
+                            elif "," in clean: clean = clean.replace(",", ".")
+                            try: return float(clean)
+                            except: return 0.0
 
-            if table_items:
-                print(f"📊 TABLE ITEMS FOUND (OCR): {len(table_items)}")
+                        # Qty
+                        q = p_norm.get("miktar") or p_norm.get("adet") or p_norm.get("satilan_adet") or p_norm.get("satis_adedi")
+                        item.quantity = int(to_float(q)) if q else 1
+                        item.exact_quantity_match = item.quantity
+
+                        # Financials
+                        item.exact_total_match = to_float(p_norm.get("toplam") or p_norm.get("tutar") or p_norm.get("satis_tutari") or p_norm.get("net_satis"))
+                        item.exact_price_match = to_float(p_norm.get("fiyat") or p_norm.get("birim_fiyat") or p_norm.get("satis_fiyati"))
+                        item.exact_stock_match = int(to_float(p_norm.get("stok") or p_norm.get("stok_mik") or p_norm.get("kalan")))
+                        item.exact_cost_match = to_float(p_norm.get("maliyet") or p_norm.get("alis_fiyati"))
+                        item.exact_profit_match = to_float(p_norm.get("kar") or p_norm.get("ecz_kar"))
+                        
+                        groq_line_items.append(item)
+                    
+                    if groq_line_items:
+                        table_items = groq_line_items
+                        print(f"🚀 GROQ ITEMS PARSED: {len(table_items)}")
+
+            except Exception as e:
+                print(f"⚠️ GROQ FAILED: {e}")
+
+            if not table_items:
+                # ==================================================
+                # 1️⃣ TABLE MODE – DOCUMENT OCR (FALLBACK)
+                # ==================================================
+                table_items = extract_table_items(document)
+
+                if table_items:
+                    print(f"📊 TABLE ITEMS FOUND (OCR): {len(table_items)}")
 
         # ==================================================
         # 2️⃣ GEOMETRY MODE (MANUAL RECONSTRUCTION)
