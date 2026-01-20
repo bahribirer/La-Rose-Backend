@@ -242,17 +242,14 @@ async def admin_report_detail(report_id: str):
     )
 
     items = []
-    # 🧠 COLLECT PRODUCT IDs
-    product_ids = set()
-    
-    # First pass: collect IDs and build basic items
-    temp_items = []
     async for i in cursor:
         p_id = i.get("productId")
-        if p_id:
-            product_ids.add(p_id)
         
-        temp_items.append({
+        # 🔥 FIX: Product ID is the Barcode (e.g. 869...). 
+        # No need to query products collection unless we need other fields.
+        barcode = p_id if p_id else "-"
+
+        items.append({
             "id": str(i["_id"]),
             "product_id": p_id,
             "product_name": i.get("productName"),
@@ -265,29 +262,8 @@ async def admin_report_detail(report_id: str):
             "profit": float(i.get("profit") or i.get("ecz_kar") or 0),
             "cost": float(i.get("cost") or i.get("maliyet") or 0),
             "confidence": float(i.get("confidence") or i.get("match_confidence") or 0),
+            "barcode": barcode
         })
-
-    # 🧠 FETCH BARCODES
-    barcode_map = {}
-    if product_ids:
-        # Assuming product_id in sales_items matches 'id' in products collection (string)
-        # If it matches '_id' (ObjectId), we'd need conversion. 
-        # checking schemas.py, Product.id is str.
-        p_cursor = db.products.find(
-            {"id": {"$in": list(product_ids)}},
-            {"id": 1, "barcode": 1, "barkod": 1}
-        )
-        async for p in p_cursor:
-            # Prefer 'barcode', fallback to 'barkod'
-            code = p.get("barcode") or p.get("barkod")
-            if code:
-                barcode_map[p["id"]] = code
-
-    # Second pass: inject barcode
-    for item in temp_items:
-        pid = item["product_id"]
-        item["barcode"] = barcode_map.get(pid, "-")
-        items.append(item)
 
     # 🔥 FIX: Admin Panel needs total_revenue (profit + cost)
     summary = report.get("summary", {})
