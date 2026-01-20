@@ -168,7 +168,7 @@ def process_text_adaptive(raw_text: str):
     Main entry point for Groq Refinement.
     Takes OCR raw text -> Returns Dictionary of products
     """
-    if not, raw_text: return None
+    if not raw_text: return None
 
     # Debug logs can be printed here, but better to return structured data
     # diagnose
