@@ -195,6 +195,7 @@ async def export_user_reports(
     month: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
     columns: Optional[str] = Query(None), # Comma separated keys
+    pharmacy: Optional[str] = Query(None), # Filter by pharmacy name
     current_user=Depends(admin_required),
 ):
     # Parse IDs
@@ -245,6 +246,12 @@ async def export_user_reports(
     
     query = {"user_id": {"$in": object_ids}}
     
+    if pharmacy:
+        # Filter reports that start with the pharmacy name (case insensitive)
+        # Because reports are named like "PharmacyName - Date"
+        import re
+        query["name"] = {"$regex": f"^{re.escape(pharmacy)}", "$options": "i"}
+
     if month and year:
         start = datetime(year, month, 1)
         end = (start + timedelta(days=32)).replace(day=1)
