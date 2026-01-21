@@ -24,6 +24,7 @@ async def mark_notification_as_read(user_id: ObjectId, notification_id: str):
         {"$set": {"is_read": True}}
     )
 
+async def mark_all_read(user_id: ObjectId):
     await db.notifications.update_many(
         {"user_id": user_id, "is_read": False},
         {"$set": {"is_read": True}}
