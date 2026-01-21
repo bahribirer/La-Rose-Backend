@@ -194,6 +194,7 @@ async def export_user_reports(
     user_id: str,
     month: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
+    columns: Optional[str] = Query(None), # Comma separated keys
     current_user=Depends(admin_required),
 ):
     if not ObjectId.is_valid(user_id):
@@ -204,7 +205,6 @@ async def export_user_reports(
     user_name = "Kullanici"
     if user_doc:
         user_name = user_doc.get("full_name") or user_doc.get("email") or "Kullanici"
-        # Sanitize filename (replace spaces with _, remove weird chars)
         user_name = "".join([c if c.isalnum() else "_" for c in user_name])
 
     query = {"user_id": ObjectId(user_id)}
@@ -230,34 +230,38 @@ async def export_user_reports(
     ws = wb.active
     ws.title = "Satis Detaylari"
     
-    # Simplified Headers
-    headers = [
-        "Tarih", 
-        "Ürün Adı", 
-        "Adet", 
-        "Birim Fiyat", 
-        "Toplam Tutar"
-    ]
-    ws.append(headers)
+    # COLUMN MAPPING
+    # Key -> (Header Name, Data Extractor Function)
+    column_map = {
+        "date": ("Tarih", lambda r, i: r.get("createdAt").strftime("%Y-%m-%d %H:%M")),
+        "product_name": ("Ürün Adı", lambda r, i: i.get("productName", "Bilinmeyen")),
+        "quantity": ("Adet", lambda r, i: i.get("quantity", 0)),
+        "unit_price": ("Birim Fiyat", lambda r, i: i.get("unitPrice", 0)),
+        "total_price": ("Toplam Tutar", lambda r, i: i.get("totalPrice", 0)),
+        "profit": ("Kâr", lambda r, i: i.get("profit", 0)),
+        "cost": ("Masraf", lambda r, i: i.get("cost", 0)),
+        "report_name": ("Rapor Adı", lambda r, i: r.get("name", "-")),
+    }
+    
+    # Determine columns to export
+    if columns:
+        selected_keys = [k.strip() for k in columns.split(",") if k.strip() in column_map]
+    else:
+        # Default
+        selected_keys = ["date", "product_name", "quantity", "unit_price", "total_price"]
+        
+    # Write Headers
+    ws.append([column_map[k][0] for k in selected_keys])
     
     for r in reports:
-        report_date = r.get("createdAt").strftime("%Y-%m-%d %H:%M")
-        
-        # Fetch items for this report
         items_cursor = db.sales_items.find({"report_id": r["_id"]})
         has_items = False
         
         async for item in items_cursor:
             has_items = True
-            ws.append([
-                report_date,
-                item.get("productName", "Bilinmeyen Ürün"),
-                item.get("quantity", 0),
-                item.get("unitPrice", 0),
-                item.get("totalPrice", 0)
-            ])
+            row = [column_map[k][1](r, item) for k in selected_keys]
+            ws.append(row)
             
-        # If no items found, skip or just show date placeholder
         if not has_items:
              pass
         
