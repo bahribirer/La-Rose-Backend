@@ -232,8 +232,11 @@ async def export_user_reports(
             if agg and agg[0].get("profile"):
                 display_name = agg[0]["profile"].get("pharmacy_name") or display_name
 
-    safe_name = "".join([c if c.isalnum() else "_" for c in display_name])
-
+    # Sanitize filename (ASCII only)
+    import unicodedata
+    normalized = unicodedata.normalize('NFKD', display_name).encode('ascii', 'ignore').decode('ascii')
+    safe_name = "".join([c if c.isalnum() else "_" for c in normalized])
+    
     query = {"user_id": {"$in": object_ids}}
     
     if month and year:
