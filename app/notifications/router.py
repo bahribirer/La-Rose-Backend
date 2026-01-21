@@ -4,7 +4,7 @@ from app.core.dependencies import get_current_firebase_user
 from app.core.database import db
 from app.users.router import get_current_db_user
 from app.notifications.schemas import NotificationResponse
-from app.notifications.service import mark_notification_as_read, mark_all_read
+from app.notifications.service import mark_notification_as_read, mark_all_read, delete_notification
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -38,9 +38,13 @@ async def read_notification(
     await mark_notification_as_read(current_user["_id"], notification_id)
     return {"status": "success"}
 
-@router.patch("/read-all")
-async def read_all_notifications(
+    await mark_all_read(current_user["_id"])
+    return {"status": "success"}
+
+@router.delete("/{notification_id}")
+async def remove_notification(
+    notification_id: str,
     current_user=Depends(get_current_db_user),
 ):
-    await mark_all_read(current_user["_id"])
+    await delete_notification(current_user["_id"], notification_id)
     return {"status": "success"}
