@@ -232,6 +232,12 @@ async def export_user_reports(
             if agg and agg[0].get("profile"):
                 display_name = agg[0]["profile"].get("pharmacy_name") or display_name
 
+    # Fetch all user names for mapping
+    user_cursor = db.users.find({"_id": {"$in": object_ids}})
+    user_map = {}
+    async for u in user_cursor:
+        user_map[u["_id"]] = u.get("full_name") or u.get("email") or "Kullanici"
+
     # Sanitize filename (ASCII only)
     import unicodedata
     normalized = unicodedata.normalize('NFKD', display_name).encode('ascii', 'ignore').decode('ascii')
@@ -264,7 +270,7 @@ async def export_user_reports(
     # Key -> (Header Name, Data Extractor Function)
     column_map = {
         "date": ("Tarih", lambda r, i: r.get("createdAt").strftime("%Y-%m-%d %H:%M")),
-        "user_name": ("Kullanıcı", lambda r, i: display_name),
+        "user_name": ("Kullanıcı", lambda r, i: user_map.get(r.get("user_id"), "-")),
         "product_name": ("Ürün Adı", lambda r, i: i.get("productName", "Bilinmeyen")),
         "quantity": ("Adet", lambda r, i: i.get("quantity", 0)),
         "unit_price": ("Birim Fiyat", lambda r, i: i.get("unitPrice", 0)),
