@@ -592,14 +592,32 @@ async def admin_user_detail(user_id: str):
     }
 
 
-@router.post("/users/{user_id}/remind-report", dependencies=[Depends(admin_required)])
-async def remind_report_notification(user_id: str):
+@router.post("/users/{user_id}/notify", dependencies=[Depends(admin_required)])
+async def send_user_notification(user_id: str, type: str = "report"):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(400, "Invalid user id")
 
     user = await db.users.find_one({"_id": ObjectId(user_id)})
     if not user:
         raise HTTPException(404, "User not found")
+        
+    # CONTENT MAP
+    content_map = {
+        "report": {
+            "title": "Rapor Hatırlatması 📊",
+            "body": "Bu haftaki stok raporunu yüklemeyi unutma! Hemen şimdi yükle.",
+        },
+        "competition": {
+            "title": "Yarışma Başladı! 🏆",
+            "body": "Yeni yarışma kayıtları açıldı. Hemen katıl ve kazanmaya başla!",
+        },
+        "stock": {
+            "title": "Stok Hatırlatması 📦",
+            "body": "Lütfen stok durumunuzu mümessilinize bildiriniz.",
+        }
+    }
+    
+    content = content_map.get(type, content_map["report"])
 
     # 🔥 REAL NOTIFICATION LOGIC (FIREBASE)
     device_tokens = user.get("device_tokens", [])
@@ -608,9 +626,9 @@ async def remind_report_notification(user_id: str):
     from app.notifications.service import create_notification
     await create_notification(
         user_id=user["_id"],
-        title="Rapor Hatırlatması 📊",
-        body="Bu haftaki stok raporunu yüklemeyi unutma! Hemen şimdi yükle.",
-        type="report_reminder"
+        title=content["title"],
+        body=content["body"],
+        type=type
     )
 
     if not device_tokens:
@@ -622,11 +640,11 @@ async def remind_report_notification(user_id: str):
         
         message = messaging.MulticastMessage(
             notification=messaging.Notification(
-                title="Rapor Hatırlatması 📊",
-                body="Bu haftaki stok raporunu yüklemeyi unutma! Hemen şimdi yükle.",
+                title=content["title"],
+                body=content["body"],
             ),
             data={
-                "type": "report_reminder",
+                "type": type,
                 "click_action": "FLUTTER_NOTIFICATION_CLICK"
             },
             tokens=device_tokens,
