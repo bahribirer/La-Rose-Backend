@@ -604,6 +604,15 @@ async def remind_report_notification(user_id: str):
     # 🔥 REAL NOTIFICATION LOGIC (FIREBASE)
     device_tokens = user.get("device_tokens", [])
     
+    # 📌 SAVE TO DB (History)
+    from app.notifications.service import create_notification
+    await create_notification(
+        user_id=user["_id"],
+        title="Rapor Hatırlatması 📊",
+        body="Bu haftaki stok raporunu yüklemeyi unutma! Hemen şimdi yükle.",
+        type="report_reminder"
+    )
+
     if not device_tokens:
         print(f"⚠️ NO TOKENS FOUND FOR: {user.get('email')}")
         return {"message": "Kullanıcının kayıtlı cihazı yok", "status": "no_device"}
