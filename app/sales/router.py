@@ -203,9 +203,10 @@ async def export_user_reports(
     # Fetch User Name for Filename
     user_doc = await db.users.find_one({"_id": ObjectId(user_id)})
     user_name = "Kullanici"
+    display_name = "Kullanici"
     if user_doc:
-        user_name = user_doc.get("full_name") or user_doc.get("email") or "Kullanici"
-        user_name = "".join([c if c.isalnum() else "_" for c in user_name])
+        display_name = user_doc.get("full_name") or user_doc.get("email") or "Kullanici"
+        user_name = "".join([c if c.isalnum() else "_" for c in display_name])
 
     query = {"user_id": ObjectId(user_id)}
     
@@ -234,10 +235,15 @@ async def export_user_reports(
     # Key -> (Header Name, Data Extractor Function)
     column_map = {
         "date": ("Tarih", lambda r, i: r.get("createdAt").strftime("%Y-%m-%d %H:%M")),
+        "user_name": ("Kullanıcı", lambda r, i: display_name),
         "product_name": ("Ürün Adı", lambda r, i: i.get("productName", "Bilinmeyen")),
         "quantity": ("Adet", lambda r, i: i.get("quantity", 0)),
         "unit_price": ("Birim Fiyat", lambda r, i: i.get("unitPrice", 0)),
         "total_price": ("Toplam Tutar", lambda r, i: i.get("totalPrice", 0)),
+        "profit": ("Kâr", lambda r, i: i.get("profit", 0)),
+        "cost": ("Masraf", lambda r, i: i.get("cost", 0)),
+        "report_name": ("Rapor Adı", lambda r, i: r.get("name", "-")),
+    }
         "profit": ("Kâr", lambda r, i: i.get("profit", 0)),
         "cost": ("Masraf", lambda r, i: i.get("cost", 0)),
         "report_name": ("Rapor Adı", lambda r, i: r.get("name", "-")),
