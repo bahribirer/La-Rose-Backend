@@ -199,6 +199,14 @@ async def export_user_reports(
     if not ObjectId.is_valid(user_id):
         raise HTTPException(400, "Invalid ID")
 
+    # Fetch User Name for Filename
+    user_doc = await db.users.find_one({"_id": ObjectId(user_id)})
+    user_name = "Kullanici"
+    if user_doc:
+        user_name = user_doc.get("full_name") or user_doc.get("email") or "Kullanici"
+        # Sanitize filename (replace spaces with _, remove weird chars)
+        user_name = "".join([c if c.isalnum() else "_" for c in user_name])
+
     query = {"user_id": ObjectId(user_id)}
     
     if month and year:
@@ -243,7 +251,7 @@ async def export_user_reports(
     wb.save(output)
     output.seek(0)
     
-    filename = f"Raporlar_{user_id}.xlsx"
+    filename = f"Raporlar_{user_name}.xlsx"
     
     return StreamingResponse(
         output, 
