@@ -34,3 +34,8 @@ async def delete_notification(user_id: ObjectId, notification_id: str):
     await db.notifications.delete_one(
         {"_id": ObjectId(notification_id), "user_id": user_id}
     )
+
+async def delete_all_notifications(user_id: ObjectId):
+    await db.notifications.delete_many(
+        {"user_id": user_id}
+    )

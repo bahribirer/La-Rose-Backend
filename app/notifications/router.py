@@ -4,7 +4,7 @@ from app.core.dependencies import get_current_firebase_user
 from app.core.database import db
 from app.users.router import get_current_db_user
 from app.notifications.schemas import NotificationResponse
-from app.notifications.service import mark_notification_as_read, mark_all_read, delete_notification
+from app.notifications.service import mark_notification_as_read, mark_all_read, delete_notification, delete_all_notifications
 
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
@@ -47,4 +47,11 @@ async def remove_notification(
     current_user=Depends(get_current_db_user),
 ):
     await delete_notification(current_user["_id"], notification_id)
+    return {"status": "success"}
+
+@router.delete("/")
+async def remove_all_notifications(
+    current_user=Depends(get_current_db_user),
+):
+    await delete_all_notifications(current_user["_id"])
     return {"status": "success"}
