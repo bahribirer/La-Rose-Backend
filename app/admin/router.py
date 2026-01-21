@@ -601,15 +601,61 @@ async def remind_report_notification(user_id: str):
     if not user:
         raise HTTPException(404, "User not found")
 
-    # 🔥 MOCK NOTIFICATION LOGIC
-    # Gerçek senaryoda burada Push Notification (FCM) veya Email gönderilecek.
-    # Şimdilik sadece log atıyoruz.
-    print(f"📧 SENDING REMINDER TO: {user.get('email')} ({user.get('full_name')})")
+    # 🔥 REAL NOTIFICATION LOGIC (FIREBASE)
+    device_tokens = user.get("device_tokens", [])
+    
+    if not device_tokens:
+        print(f"⚠️ NO TOKENS FOUND FOR: {user.get('email')}")
+        return {"message": "Kullanıcının kayıtlı cihazı yok", "status": "no_device"}
 
-    # (Opsiyonel) Notification log tablosuna kayıt atılabilir
-    # await db.notifications.insert_one({...})
+    try:
+        from firebase_admin import messaging
+        
+        message = messaging.MulticastMessage(
+            notification=messaging.Notification(
+                title="Rapor Hatırlatması 📊",
+                body="Bu haftaki stok raporunu yüklemeyi unutma! Hemen şimdi yükle.",
+            ),
+            data={
+                "type": "report_reminder",
+                "click_action": "FLUTTER_NOTIFICATION_CLICK"
+            },
+            tokens=device_tokens,
+        )
+        
+        response = messaging.send_multicast(message)
+        print(f"✅ NOTIFICATION SENT: Success {response.success_count}, Failure {response.failure_count}")
+        
+        # Cleanup invalid tokens
+        if response.failure_count > 0:
+            responses = response.responses
+            failed_tokens = []
+            for idx, resp in enumerate(responses):
+                if not resp.success:
+                    # Check if token is invalid
+                    failed_tokens.append(device_tokens[idx])
+            
+            if failed_tokens:
+                await db.users.update_one(
+                    {"_id": user["_id"]},
+                    {"$pull": {"device_tokens": {"$in": failed_tokens}}}
+                )
 
-    return {"message": "Hatırlatma bildirimi gönderildi", "status": "sent"}
+        return {
+            "message": f"Bildirim gönderildi ({response.success_count} başrılı, {response.failure_count} hatalı)", 
+            "status": "sent",
+            "details": {
+                "success": response.success_count,
+                "failure": response.failure_count
+            }
+        }
+
+    except ImportError:
+        print("❌ FIREBASE ADMIN NOT INSTALLED OR CONFIGURED")
+        return {"message": "Firebase yapılandırması eksik", "status": "error"}
+    except Exception as e:
+        print(f"❌ NOTIFICATION ERROR: {e}")
+        return {"message": f"Hata: {str(e)}", "status": "error"}
 
 @router.get("/competitions", dependencies=[Depends(admin_required)])
 async def admin_list_competitions():

@@ -33,7 +33,9 @@ async def get_current_db_user(
         "phone_verified": False,
         "phone_verified_at": None,
         "email_verified": False,
+        "email_verified": False,
         "onboarding_completed": False,
+        "device_tokens": [],
     }
 
         result = await db.users.insert_one(user_doc)
@@ -115,6 +117,17 @@ async def delete_my_account(
     current_user=Depends(get_current_db_user),
 ):
     await delete_account(current_user)
+
+@router.post("/me/device-token")
+async def update_device_token(
+    token: str = Query(...),
+    current_user=Depends(get_current_db_user),
+):
+    await db.users.update_one(
+        {"_id": current_user["_id"]},
+        {"$addToSet": {"device_tokens": token}}
+    )
+    return {"status": "success", "message": "Token registered"}
 
 
 @router.get("/debug/token")

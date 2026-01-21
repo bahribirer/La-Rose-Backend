@@ -12,3 +12,4 @@ numpy
 rapidfuzz
 google-cloud-documentai
 groq
+firebase-admin
