@@ -591,6 +591,26 @@ async def admin_user_detail(user_id: str):
         "total_profit": u.get("total_profit", 0),
     }
 
+
+@router.post("/users/{user_id}/remind-report", dependencies=[Depends(admin_required)])
+async def remind_report_notification(user_id: str):
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(400, "Invalid user id")
+
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    # 🔥 MOCK NOTIFICATION LOGIC
+    # Gerçek senaryoda burada Push Notification (FCM) veya Email gönderilecek.
+    # Şimdilik sadece log atıyoruz.
+    print(f"📧 SENDING REMINDER TO: {user.get('email')} ({user.get('full_name')})")
+
+    # (Opsiyonel) Notification log tablosuna kayıt atılabilir
+    # await db.notifications.insert_one({...})
+
+    return {"message": "Hatırlatma bildirimi gönderildi", "status": "sent"}
+
 @router.get("/competitions", dependencies=[Depends(admin_required)])
 async def admin_list_competitions():
     cursor = db.competitions.find({}).sort("starts_at", -1)
