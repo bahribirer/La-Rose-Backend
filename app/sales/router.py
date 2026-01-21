@@ -244,10 +244,7 @@ async def export_user_reports(
         "cost": ("Masraf", lambda r, i: i.get("cost", 0)),
         "report_name": ("Rapor Adı", lambda r, i: r.get("name", "-")),
     }
-        "profit": ("Kâr", lambda r, i: i.get("profit", 0)),
-        "cost": ("Masraf", lambda r, i: i.get("cost", 0)),
-        "report_name": ("Rapor Adı", lambda r, i: r.get("name", "-")),
-    }
+
     
     # Determine columns to export
     if columns:
