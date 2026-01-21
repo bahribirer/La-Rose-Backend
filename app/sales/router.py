@@ -186,6 +186,71 @@ async def list_sales_reports(
 
 
 
+
+# ================= EXPORT =================
+
+@router.get("/reports/export")
+async def export_user_reports(
+    user_id: str,
+    month: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+    current_user=Depends(admin_required),
+):
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(400, "Invalid ID")
+
+    query = {"user_id": ObjectId(user_id)}
+    
+    if month and year:
+        start = datetime(year, month, 1)
+        end = (start + timedelta(days=32)).replace(day=1)
+        query["createdAt"] = {"$gte": start, "$lt": end}
+
+    reports = []
+    async for r in db.sales_reports.find(query):
+        reports.append(r)
+        
+    if not reports:
+        raise HTTPException(404, "Rapor bulunamadı")
+        
+    # GENERATE EXCEL
+    import openpyxl
+    import io
+    from fastapi.responses import StreamingResponse
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Raporlar"
+    
+    headers = ["Rapor ID", "Rapor Adı", "Tarih", "Tip", "Kaynak", "Toplam Ürün", "Toplam Masraf", "Toplam Kâr"]
+    ws.append(headers)
+    
+    for r in reports:
+        summary = r.get("summary", {})
+        ws.append([
+            str(r["_id"]),
+            r.get("name", "İsimsiz"),
+            r.get("createdAt").strftime("%Y-%m-%d %H:%M"),
+            r.get("type"),
+            r.get("source"),
+            summary.get("total_items", 0),
+            summary.get("total_cost", 0),
+            summary.get("total_profit", 0),
+        ])
+        
+    # SAVE TO BUFFER
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    filename = f"Raporlar_{user_id}.xlsx"
+    
+    return StreamingResponse(
+        output, 
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 # ================= DETAIL =================
 
 @router.get("/reports/{report_id}")
@@ -479,69 +544,6 @@ async def get_scoreboard_history(
             "total_items": r["total_items"],
         })
 
-# ================= EXPORT =================
-
-@router.get("/reports/export")
-async def export_user_reports(
-    user_id: str,
-    month: Optional[int] = Query(None),
-    year: Optional[int] = Query(None),
-    current_user=Depends(admin_required),
-):
-    if not ObjectId.is_valid(user_id):
-        raise HTTPException(400, "Invalid ID")
-
-    query = {"user_id": ObjectId(user_id)}
-    
-    if month and year:
-        start = datetime(year, month, 1)
-        end = (start + timedelta(days=32)).replace(day=1)
-        query["createdAt"] = {"$gte": start, "$lt": end}
-
-    reports = []
-    async for r in db.sales_reports.find(query):
-        reports.append(r)
-        
-    if not reports:
-        raise HTTPException(404, "Rapor bulunamadı")
-        
-    # GENERATE EXCEL
-    import openpyxl
-    import io
-    from fastapi.responses import StreamingResponse
-    
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Raporlar"
-    
-    headers = ["Rapor ID", "Rapor Adı", "Tarih", "Tip", "Kaynak", "Toplam Ürün", "Toplam Masraf", "Toplam Kâr"]
-    ws.append(headers)
-    
-    for r in reports:
-        summary = r.get("summary", {})
-        ws.append([
-            str(r["_id"]),
-            r.get("name", "İsimsiz"),
-            r.get("createdAt").strftime("%Y-%m-%d %H:%M"),
-            r.get("type"),
-            r.get("source"),
-            summary.get("total_items", 0),
-            summary.get("total_cost", 0),
-            summary.get("total_profit", 0),
-        ])
-        
-    # SAVE TO BUFFER
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    filename = f"Raporlar_{user_id}.xlsx"
-    
-    return StreamingResponse(
-        output, 
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
 
     return {
         "my_user_id": str(current_user["_id"]),
