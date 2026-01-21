@@ -623,7 +623,7 @@ async def remind_report_notification(user_id: str):
             tokens=device_tokens,
         )
         
-        response = messaging.send_multicast(message)
+        response = messaging.send_each_for_multicast(message)
         print(f"✅ NOTIFICATION SENT: Success {response.success_count}, Failure {response.failure_count}")
         
         # Cleanup invalid tokens
