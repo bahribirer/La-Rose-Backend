@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.competitions.service import get_user_competition_status
 from app.sales.schemas import SaleReportCreateRequest
 from app.sales.service import save_scan_report
-from app.users.router import get_current_db_user, admin_required
+from app.users.router import get_current_db_user
+from app.admin.dependencies import admin_required
 from app.core.database import db
 from bson import ObjectId
 from typing import Optional
