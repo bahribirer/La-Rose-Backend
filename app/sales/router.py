@@ -228,23 +228,50 @@ async def export_user_reports(
     
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Raporlar"
+    ws.title = "Satis Detaylari"
     
-    headers = ["Rapor ID", "Rapor Adı", "Tarih", "Tip", "Kaynak", "Toplam Ürün", "Toplam Masraf", "Toplam Kâr"]
+    # Detailed Headers
+    headers = [
+        "Rapor Tarihi", "Rapor Adı", 
+        "Ürün Adı", "Adet", "Birim Fiyat", "Toplam Tutar", "Kâr", "Masraf",
+        "Rapor ID", "Kaynak"
+    ]
     ws.append(headers)
     
     for r in reports:
-        summary = r.get("summary", {})
-        ws.append([
-            str(r["_id"]),
-            r.get("name", "İsimsiz"),
-            r.get("createdAt").strftime("%Y-%m-%d %H:%M"),
-            r.get("type"),
-            r.get("source"),
-            summary.get("total_items", 0),
-            summary.get("total_cost", 0),
-            summary.get("total_profit", 0),
-        ])
+        report_date = r.get("createdAt").strftime("%Y-%m-%d %H:%M")
+        report_name = r.get("name", "İsimsiz")
+        report_id = str(r["_id"])
+        source = r.get("source")
+        
+        # Fetch items for this report
+        items_cursor = db.sales_items.find({"report_id": r["_id"]})
+        has_items = False
+        
+        async for item in items_cursor:
+            has_items = True
+            ws.append([
+                report_date,
+                report_name,
+                item.get("productName", "Bilinmeyen Ürün"),
+                item.get("quantity", 0),
+                item.get("unitPrice", 0),
+                item.get("totalPrice", 0),
+                item.get("profit", 0),
+                item.get("cost", 0),
+                report_id,
+                source
+            ])
+            
+        # If no items found, still log the report
+        if not has_items:
+             ws.append([
+                report_date,
+                report_name,
+                "-", 0, 0, 0, 0, 0,
+                report_id,
+                source
+            ])
         
     # SAVE TO BUFFER
     output = io.BytesIO()
