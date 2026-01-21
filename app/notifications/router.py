@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
 from app.core.dependencies import get_current_firebase_user
 from app.core.database import db
-from app.users.router import get_current_db_user, admin_required
+from app.users.router import get_current_db_user
+from app.admin.dependencies import admin_required
 from app.notifications.schemas import NotificationResponse
 from app.notifications.service import mark_notification_as_read, mark_all_read, delete_notification, delete_all_notifications
 
