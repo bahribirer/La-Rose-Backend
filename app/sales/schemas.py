@@ -35,8 +35,7 @@ class SaleItemFromScan(BaseModel):
     # ================= MEVCUT ALANLAR =================
     ecz_kar: Optional[float] = Field(
         default=None,
-        ge=0,
-        description="Eczacı karı (negatif olamaz)",
+        description="Eczacı karı (negatif olabilir)",
         alias="profit"
     )
 
