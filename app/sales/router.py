@@ -191,24 +191,50 @@ async def list_sales_reports(
 
 @router.get("/reports/export")
 async def export_user_reports(
-    user_id: str,
+    user_ids: str,
     month: Optional[int] = Query(None),
     year: Optional[int] = Query(None),
     columns: Optional[str] = Query(None), # Comma separated keys
     current_user=Depends(admin_required),
 ):
-    if not ObjectId.is_valid(user_id):
-        raise HTTPException(400, "Invalid ID")
+    # Parse IDs
+    ids_list = [id.strip() for id in user_ids.split(",") if id.strip()]
+    if not ids_list:
+        raise HTTPException(400, "No user IDs provided")
+        
+    for uid in ids_list:
+        if not ObjectId.is_valid(uid):
+             raise HTTPException(400, f"Invalid ID: {uid}")
+             
+    object_ids = [ObjectId(uid) for uid in ids_list]
 
-    # Fetch User Name for Filename
-    user_doc = await db.users.find_one({"_id": ObjectId(user_id)})
-    user_name = "Kullanici"
-    display_name = "Kullanici"
+    # Fetch User Name/Pharmacy for Filename (from first user)
+    user_doc = await db.users.find_one({"_id": object_ids[0]})
+    display_name = "Toplu_Rapor"
     if user_doc:
+        # If single user, strict name. If multiple, maybe pharmacy name?
+        # Let's rely on the first user's pharmacy name or name
+        profile_pharmacy = user_doc.get("pharmacy_name") # From aggregation it might be different, but here we query raw user
+        # Raw users collection usually doesn't have pharmacy_name unless aggregated or saved there? 
+        # Actually user_doc is from db.users. 
+        # Let's use name.
         display_name = user_doc.get("full_name") or user_doc.get("email") or "Kullanici"
-        user_name = "".join([c if c.isalnum() else "_" for c in display_name])
+        
+        # If multiple users, try to find a common pharmacy name or just use "Eczane_Grubu"
+        if len(object_ids) > 1:
+            # Try to fetch profile for pharmacy name
+            pipeline = [
+                {"$match": {"_id": object_ids[0]}},
+                {"$lookup": {"from": "user_profiles", "localField": "_id", "foreignField": "user_id", "as": "profile"}},
+                {"$unwind": {"path": "$profile", "preserveNullAndEmptyArrays": True}}
+            ]
+            agg = await db.users.aggregate(pipeline).to_list(1)
+            if agg and agg[0].get("profile"):
+                display_name = agg[0]["profile"].get("pharmacy_name") or display_name
 
-    query = {"user_id": ObjectId(user_id)}
+    safe_name = "".join([c if c.isalnum() else "_" for c in display_name])
+
+    query = {"user_id": {"$in": object_ids}}
     
     if month and year:
         start = datetime(year, month, 1)
@@ -273,7 +299,7 @@ async def export_user_reports(
     wb.save(output)
     output.seek(0)
     
-    filename = f"Raporlar_{user_name}.xlsx"
+    filename = f"Raporlar_{safe_name}.xlsx"
     
     return StreamingResponse(
         output, 
