@@ -79,3 +79,18 @@ async def get_admin_notifications(
         })
         
     return notifications
+
+@router.delete("/admin/notifications/{notification_id}")
+async def delete_admin_notification(
+    notification_id: str,
+    user=Depends(admin_required)
+):
+    if not ObjectId.is_valid(notification_id):
+        raise HTTPException(400, "Invalid ID")
+        
+    result = await db.admin_notifications.delete_one({"_id": ObjectId(notification_id)})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Notification not found")
+        
+    return {"status": "success"}
