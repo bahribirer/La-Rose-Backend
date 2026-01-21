@@ -230,19 +230,18 @@ async def export_user_reports(
     ws = wb.active
     ws.title = "Satis Detaylari"
     
-    # Detailed Headers
+    # Simplified Headers
     headers = [
-        "Rapor Tarihi", "Rapor Adı", 
-        "Ürün Adı", "Adet", "Birim Fiyat", "Toplam Tutar", "Kâr", "Masraf",
-        "Rapor ID", "Kaynak"
+        "Tarih", 
+        "Ürün Adı", 
+        "Adet", 
+        "Birim Fiyat", 
+        "Toplam Tutar"
     ]
     ws.append(headers)
     
     for r in reports:
         report_date = r.get("createdAt").strftime("%Y-%m-%d %H:%M")
-        report_name = r.get("name", "İsimsiz")
-        report_id = str(r["_id"])
-        source = r.get("source")
         
         # Fetch items for this report
         items_cursor = db.sales_items.find({"report_id": r["_id"]})
@@ -252,26 +251,15 @@ async def export_user_reports(
             has_items = True
             ws.append([
                 report_date,
-                report_name,
                 item.get("productName", "Bilinmeyen Ürün"),
                 item.get("quantity", 0),
                 item.get("unitPrice", 0),
-                item.get("totalPrice", 0),
-                item.get("profit", 0),
-                item.get("cost", 0),
-                report_id,
-                source
+                item.get("totalPrice", 0)
             ])
             
-        # If no items found, still log the report
+        # If no items found, skip or just show date placeholder
         if not has_items:
-             ws.append([
-                report_date,
-                report_name,
-                "-", 0, 0, 0, 0, 0,
-                report_id,
-                source
-            ])
+             pass
         
     # SAVE TO BUFFER
     output = io.BytesIO()
