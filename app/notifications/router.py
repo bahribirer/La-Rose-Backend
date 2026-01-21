@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
 from app.core.dependencies import get_current_firebase_user
 from app.core.database import db
-from app.users.router import get_current_db_user
+from app.users.router import get_current_db_user, admin_required
 from app.notifications.schemas import NotificationResponse
 from app.notifications.service import mark_notification_as_read, mark_all_read, delete_notification, delete_all_notifications
 
@@ -55,3 +55,25 @@ async def remove_all_notifications(
 ):
     await delete_all_notifications(current_user["_id"])
     return {"status": "success"}
+
+# ================= ADMIN NOTIFICATIONS =================
+@router.get("/admin/notifications")
+async def get_admin_notifications(
+    limit: int = 10,
+    user=Depends(admin_required)
+):
+    cursor = db.admin_notifications.find().sort("created_at", -1).limit(limit)
+    
+    notifications = []
+    async for n in cursor:
+        notifications.append({
+            "id": str(n["_id"]),
+            "title": n.get("title"),
+            "body": n.get("body"),
+            "type": n.get("type"),
+            "is_read": n.get("is_read", False),
+            "created_at": n["created_at"],
+            "data": n.get("data", {})
+        })
+        
+    return notifications

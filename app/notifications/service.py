@@ -18,6 +18,21 @@ async def create_notification(user_id: ObjectId, title: str, body: str, type: st
     await db.notifications.insert_one(notification)
     print(f"✅ NOTIFICATION SAVED TO DB: {title} -> {user_id}")
 
+async def create_admin_notification(title: str, body: str, type: str = "goal_reached", data: dict = None):
+    """
+    Creates a notification intended for the Admin Panel.
+    """
+    notification = {
+        "title": title,
+        "body": body,
+        "type": type,
+        "data": data or {},
+        "is_read": False,
+        "created_at": datetime.utcnow()
+    }
+    await db.admin_notifications.insert_one(notification)
+    print(f"👮 ADMIN NOTIFICATION: {title}")
+
 async def mark_notification_as_read(user_id: ObjectId, notification_id: str):
     await db.notifications.update_one(
         {"_id": ObjectId(notification_id), "user_id": user_id},

@@ -86,6 +86,18 @@ async def save_sales_from_scan(
         is_competition_report=is_competition_report,
     )
 
+    # 🚨 ADMIN NOTIFICATION CHECK: 4th Report
+    if monthly_count + 1 == 4:
+        from app.notifications.service import create_admin_notification
+        user_name = current_user.get("full_name") or current_user.get("email") or "Kullanıcı"
+        
+        await create_admin_notification(
+            title="🎯 Aylık Hedef Tamamlandı!",
+            body=f"{user_name} bu ayki 4. raporunu yükleyerek kotasını doldurdu.",
+            type="goal_reached",
+            data={"user_id": str(current_user["_id"])}
+        )
+
     return {
         "message": "Scan raporu kaydedildi",
         "report_id": result["report_id"],
