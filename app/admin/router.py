@@ -361,7 +361,6 @@ async def representatives_performance(
         # 🔹 aggregates
         {
             "$addFields": {
-            "$addFields": {
                 "total_items": { "$sum": "$reports.summary.total_items" },
                 "total_profit": { "$sum": "$reports.summary.total_profit" },
                 "total_cost": { "$sum": "$reports.summary.total_cost" }
@@ -442,7 +441,6 @@ async def representative_detail(name: str):
 
         # totals
         {
-            "$addFields": {
             "$addFields": {
                 "total_items": { "$sum": "$reports.summary.total_items" },
                 "total_profit": { "$sum": "$reports.summary.total_profit" },
