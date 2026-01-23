@@ -204,6 +204,9 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
         # Typically we get cost from our product database based on barcode.
         # But for now, let's store what we have. matching logic in service layer will handle cost lookup.
         
+        if net_sales < 0:
+            net_sales = 0.0 # Should not be negative usually
+            
         item = {
             "urun_id": barcode, # Temporarily use barcode as ID, service will map it
             "barcode": barcode,
@@ -218,4 +221,6 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
         }
         items.append(item)
         
+    print(f"✅ PARSED {len(items)} ITEMS. FIRST ITEM: {items[0] if items else 'None'}")
+    print(f"✅ PARSED {len(items)} ITEMS. FIRST ITEM: {items[0] if items else 'None'}")
     return items
