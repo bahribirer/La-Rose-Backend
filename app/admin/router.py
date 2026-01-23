@@ -140,6 +140,7 @@ async def list_users():
             "$addFields": {
                 "total_reports": { "$size": "$reports" },
                 "total_profit": { "$sum": "$reports.summary.total_profit" },
+                "total_cost": { "$sum": "$reports.summary.total_cost" },
                 "total_items": { "$sum": "$reports.summary.total_items" }
             }
         },
@@ -160,6 +161,7 @@ async def list_users():
 
                 "total_reports": 1,
                 "total_profit": 1,
+                "total_cost": 1,
                 "total_items": 1
             }
         },
@@ -189,6 +191,7 @@ async def list_users():
 
             "total_reports": int(u.get("total_reports", 0)),
             "total_profit": float(u.get("total_profit", 0)),
+            "total_revenue": float(u.get("total_profit", 0) + u.get("total_cost", 0)),
             "total_items": int(u.get("total_items", 0)),
         })
 
@@ -358,13 +361,20 @@ async def representatives_performance(
         # 🔹 aggregates
         {
             "$addFields": {
+            "$addFields": {
                 "total_items": { "$sum": "$reports.summary.total_items" },
-                "total_profit": { "$sum": "$reports.summary.total_profit" }
+                "total_profit": { "$sum": "$reports.summary.total_profit" },
+                "total_cost": { "$sum": "$reports.summary.total_cost" }
             }
+        },
+        { 
+            "$addFields": { 
+                "total_revenue": { "$add": ["$total_profit", "$total_cost"] } 
+            } 
         },
 
         # 🔹 sıralama
-        { "$sort": { "total_profit": -1 } }
+        { "$sort": { "total_revenue": -1 } }
     ]
 
     cursor = db.user_profiles.aggregate(pipeline)
@@ -378,6 +388,7 @@ async def representatives_performance(
             "user_count": int(r.get("user_count", 0)),
             "total_items": int(r.get("total_items", 0)),
             "total_profit": float(r.get("total_profit", 0)),
+            "total_revenue": float(r.get("total_revenue", 0)),
         })
 
     return results
@@ -432,8 +443,10 @@ async def representative_detail(name: str):
         # totals
         {
             "$addFields": {
+            "$addFields": {
                 "total_items": { "$sum": "$reports.summary.total_items" },
-                "total_profit": { "$sum": "$reports.summary.total_profit" }
+                "total_profit": { "$sum": "$reports.summary.total_profit" },
+                "total_cost": { "$sum": "$reports.summary.total_cost" }
             }
         }
     ]
@@ -462,6 +475,7 @@ async def representative_detail(name: str):
         "users": users,
         "total_items": int(r.get("total_items", 0)),
         "total_profit": float(r.get("total_profit", 0)),
+        "total_revenue": float(r.get("total_profit", 0) + r.get("total_cost", 0)),
     }
 
 @router.get(
@@ -570,7 +584,8 @@ async def admin_user_detail(user_id: str):
             "$addFields": {
                 "total_reports": { "$size": "$reports" },
                 "total_items": { "$sum": "$reports.summary.total_items" },
-                "total_profit": { "$sum": "$reports.summary.total_profit" }
+                "total_profit": { "$sum": "$reports.summary.total_profit" },
+                "total_cost": { "$sum": "$reports.summary.total_cost" }
             }
         }
     ]
@@ -591,6 +606,7 @@ async def admin_user_detail(user_id: str):
         "total_reports": u.get("total_reports", 0),
         "total_items": u.get("total_items", 0),
         "total_profit": u.get("total_profit", 0),
+        "total_revenue": u.get("total_profit", 0) + u.get("total_cost", 0),
     }
 
 

@@ -281,9 +281,10 @@ async def export_user_reports(
         "product_name": ("Ürün Adı", lambda r, i: i.get("productName", "Bilinmeyen")),
         "quantity": ("Adet", lambda r, i: i.get("quantity", 0)),
         "unit_price": ("Birim Fiyat", lambda r, i: i.get("unitPrice", 0)),
-        "total_price": ("Toplam Tutar", lambda r, i: i.get("totalPrice", 0)),
-        "profit": ("Kâr", lambda r, i: i.get("profit", 0)),
-        "cost": ("Masraf", lambda r, i: i.get("cost", 0)),
+        "total_price": ("Net Satış", lambda r, i: i.get("totalPrice", 0)),
+        "barcode": ("Barkod", lambda r, i: i.get("barcode", "-")),
+        # "profit": ("Kâr", lambda r, i: i.get("profit", 0)),
+        # "cost": ("Masraf", lambda r, i: i.get("cost", 0)),
         "report_name": ("Rapor Adı", lambda r, i: r.get("name", "-")),
     }
 
@@ -293,7 +294,8 @@ async def export_user_reports(
         selected_keys = [k.strip() for k in columns.split(",") if k.strip() in column_map]
     else:
         # Default
-        selected_keys = ["date", "product_name", "quantity", "unit_price", "total_price"]
+        # Default
+        selected_keys = ["date", "barcode", "product_name", "quantity", "unit_price", "total_price"]
         
     # Write Headers
     ws.append([column_map[k][0] for k in selected_keys])
