@@ -59,38 +59,42 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
     # Normalize column names to lowercase and strip whitespace for matching
     df.columns = [str(col).strip() for col in df.columns]
     
-    # Map expected columns to actual columns
-    # We look for keywords in the column names
     col_map = {}
     
-    # Define keywords for each target field
-    keywords = {
-        "date": ["tarih", "date", "zaman", "donem", "islem tarihi"],
-        "barcode": ["barkod", "barcode", "code", "kod", "urun kodu", "mal numarasi"],
-        "product_name": ["ürün adı", "urun adi", "product", "name", "isim", "aciklama", "malzem aciklamasi"],
-        "quantity": ["satılan adet", "miktar", "quantity", "adet", "satis adedi", "qty", "sayi"],
-        "stock": ["stok", "stock", "mevcut", "kalan"],
-        "unit_price": ["birim fiyat", "fiyat", "price", "unit price", "satis fiyati", "perakende", "sf"],
-        "discount_vat": ["iskonto", "kdv", "discount", "vat", "vergi", "indirim"],
-        "total_price": ["net satış", "net satis", "tutar", "toplam", "satis tutari", "ciro", "revenue"]
-    }
-    
-    found_cols = {col.lower().replace('İ', 'i').replace('I', 'ı'): col for col in df.columns}
-    
-    # Debug found columns
-    print(f"📄 EXCEL COLS FOUND: {list(found_cols.keys())}")
-
-    # Re-build normalized map
-    found_cols = {normalize(col): col for col in df.columns}
+    # 🔹 FUZZY MATCHING HELPER (Regex based)
+    import re
+    def find_column(keywords, columns):
+        for col_name in columns:
+            norm_col = normalize(col_name).replace(" ", "") # Remove spaces for checking
+            for key in keywords:
+                norm_key = normalize(key).replace(" ", "")
+                if norm_key in norm_col:
+                    return col_name
+        return None
 
     for field, keys in keywords.items():
-        for key in keys:
-            norm_key = normalize(key)
-            # Match if key is IN column name
-            match = next((c for c in found_cols if norm_key in c), None)
+        match = find_column(keys, df.columns)
+        if match:
+            col_map[field] = match
+
+    # 🔹 DATE EXTRACTION BACKUP (Metadata Rows)
+    # If no date column found, scan the first 20 rows of original preview for a date pattern
+    if "date" not in col_map:
+        date_pattern = re.compile(r'\d{1,2}[./-]\d{1,2}[./-]\d{2,4}')
+        extracted_date = None
+        
+        # Scan preview rows again
+        for idx, row in df_preview.iterrows():
+            row_str = " ".join([str(val) for val in row.values])
+            match = date_pattern.search(row_str)
             if match:
-                col_map[field] = found_cols[match]
+                extracted_date = match.group(0)
+                print(f"📅 EXTRACTED DATE FROM METADATA: {extracted_date}")
                 break
+        
+        if extracted_date:
+            # We'll assign this global date to every row later
+            col_map["global_date"] = extracted_date
 
     
     # Validation: We strictly need Barcode, Quantity
@@ -123,7 +127,9 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
             
         # Date Extraction
         date_val = None
-        if "date" in col_map:
+        if "global_date" in col_map:
+             date_val = col_map["global_date"]
+        elif "date" in col_map:
             try:
                 val = row[col_map["date"]]
                 if pd.notna(val):
