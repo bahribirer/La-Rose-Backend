@@ -351,6 +351,7 @@ async def get_sales_report_detail(
     # 🔥 ADMIN FİYATLAR
     "unitPrice": i.get("unitPrice"),
     "totalPrice": i.get("totalPrice"),
+    "stock": i.get("stock"),
 
     # mevcut alanlar
     "profit": i.get("profit"),

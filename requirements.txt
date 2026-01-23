@@ -14,3 +14,4 @@ google-cloud-documentai
 groq
 firebase-admin
 openpyxl
+pandas

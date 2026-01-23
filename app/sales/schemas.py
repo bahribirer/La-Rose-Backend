@@ -61,6 +61,11 @@ class SaleItemFromScan(BaseModel):
         alias="stock"
     )
 
+    date: Optional[str] = Field(
+        default=None,
+        description="Satış tarihi (Excel'den)"
+    )
+
     model_config = {
         "extra": "ignore", 
         "populate_by_name": True,

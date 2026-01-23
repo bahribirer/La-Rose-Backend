@@ -262,7 +262,9 @@ async def admin_report_detail(report_id: str):
             "profit": float(i.get("profit") or i.get("ecz_kar") or 0),
             "cost": float(i.get("cost") or i.get("maliyet") or 0),
             "confidence": float(i.get("confidence") or i.get("match_confidence") or 0),
-            "barcode": barcode
+            "date": i.get("date"),
+            "barcode": barcode,
+            "stock": int(i.get("stock") or i.get("stok_miktari") or 0)
         })
 
     # 🔥 FIX: Admin Panel needs total_revenue (profit + cost)

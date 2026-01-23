@@ -64,11 +64,13 @@ async def save_scan_report(
     # 🔥 ADMIN
     "birim_fiyat": item.birim_fiyat,
     "tutar": item.tutar,
+    "stok_miktari": item.stok_miktari,
 
     # mevcut
     "maliyet": maliyet,
     "ecz_kar": ecz_kar,
     "match_confidence": item.match_confidence,
+    "date": item.date,
 })
 
 
@@ -147,11 +149,13 @@ async def save_scan_report(
     # 🔥 ADMIN
     "unitPrice": i.get("birim_fiyat"),
     "totalPrice": i.get("tutar"),
+    "stock": i.get("stok_miktari"),
 
     # mevcut
     "profit": i["ecz_kar"],
     "cost": i["maliyet"],
     "confidence": i["match_confidence"],
+    "date": i.get("date"),
 })
 
 

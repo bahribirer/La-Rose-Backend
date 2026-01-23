@@ -13,6 +13,8 @@ async def scan(request: Request):
         content_type.startswith("image/")
         or "pdf" in content_type
         or "octet-stream" in content_type
+        or "spreadsheet" in content_type 
+        or "excel" in content_type
     ):
         raise HTTPException(
             status_code=400,
@@ -27,6 +29,14 @@ async def scan(request: Request):
                 status_code=400,
                 detail="Empty or invalid file"
             )
+
+        # Dispatch based on content type or extension (implicitly handled by service via bytes check usually but here we clearly want to separate)
+        # Check bytes signature for Excel? Or just rely on simple checks.
+        # Zip signature: PK
+        if "spreadsheet" in content_type or "excel" in content_type or body[:2] == b'PK':
+             # Likely Excel (xlsx is a zip)
+             from app.scan.service import scan_report_excel
+             return await scan_report_excel(body)
 
         return await scan_report_bytes(body)
 
