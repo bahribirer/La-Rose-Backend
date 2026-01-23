@@ -275,16 +275,19 @@ async def export_user_reports(
     
     # COLUMN MAPPING
     # Key -> (Header Name, Data Extractor Function)
+    # COLUMN MAPPING
+    # Key -> (Header Name, Data Extractor Function)
     column_map = {
-        "date": ("Tarih", lambda r, i: r.get("createdAt").strftime("%Y-%m-%d %H:%M")),
+        "date": ("Tarih", lambda r, i: i.get("date") or r.get("createdAt").strftime("%d.%m.%Y")),
         "user_name": ("Kullanıcı", lambda r, i: user_map.get(r.get("user_id"), "-")),
         "product_name": ("Ürün Adı", lambda r, i: i.get("productName", "Bilinmeyen")),
         "quantity": ("Adet", lambda r, i: i.get("quantity", 0)),
-        "unit_price": ("Birim Fiyat", lambda r, i: i.get("unitPrice", 0)),
-        "total_price": ("Net Satış", lambda r, i: i.get("totalPrice", 0)),
+        "unit_price": ("Birim Fiyat", lambda r, i: i.get("unitPrice") or i.get("birim_fiyat") or 0),
+        "total_price": ("Net Satış", lambda r, i: i.get("totalPrice") or i.get("tutar") or 0),
         "barcode": ("Barkod", lambda r, i: i.get("barcode", "-")),
-        # "profit": ("Kâr", lambda r, i: i.get("profit", 0)),
-        # "cost": ("Masraf", lambda r, i: i.get("cost", 0)),
+        "stock": ("Stok", lambda r, i: i.get("stock", 0)),
+        "profit": ("Kâr", lambda r, i: i.get("profit") or i.get("ecz_kar") or 0),
+        "cost": ("Maliyet", lambda r, i: i.get("cost") or i.get("maliyet") or 0),
         "report_name": ("Rapor Adı", lambda r, i: r.get("name", "-")),
     }
 
@@ -294,8 +297,7 @@ async def export_user_reports(
         selected_keys = [k.strip() for k in columns.split(",") if k.strip() in column_map]
     else:
         # Default
-        # Default
-        selected_keys = ["date", "barcode", "product_name", "quantity", "unit_price", "total_price"]
+        selected_keys = ["date", "barcode", "product_name", "quantity", "stock", "unit_price", "total_price"]
         
     # Write Headers
     ws.append([column_map[k][0] for k in selected_keys])
