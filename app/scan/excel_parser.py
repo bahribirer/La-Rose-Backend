@@ -36,25 +36,37 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
     
     # Define keywords for each target field
     keywords = {
-        "date": ["tarih", "date"],
-        "barcode": ["barkod", "barcode", "code"],
-        "product_name": ["ürün adı", "urun adi", "product", "name", "isim"],
-        "quantity": ["satılan adet", "miktar", "quantity", "adet", "satış adedi"],
-        "stock": ["stok", "stock", "mevcut"],
-        "unit_price": ["birim fiyat", "fiyat", "price", "unit price"],
-        "discount_vat": ["iskonto", "kdv", "discount", "vat", "vergi"],
-        # "net_sales": ["net satış", "net", "tutar"] # We calculate this
+        "date": ["tarih", "date", "zaman", "donem", "islem tarihi"],
+        "barcode": ["barkod", "barcode", "code", "kod", "urun kodu", "mal numarasi"],
+        "product_name": ["ürün adı", "urun adi", "product", "name", "isim", "aciklama", "malzem aciklamasi"],
+        "quantity": ["satılan adet", "miktar", "quantity", "adet", "satis adedi", "qty", "sayi"],
+        "stock": ["stok", "stock", "mevcut", "kalan"],
+        "unit_price": ["birim fiyat", "fiyat", "price", "unit price", "satis fiyati", "perakende", "sf"],
+        "discount_vat": ["iskonto", "kdv", "discount", "vat", "vergi", "indirim"],
+        "total_price": ["net satış", "net satis", "tutar", "toplam", "satis tutari", "ciro", "revenue"]
     }
     
-    found_cols = {col.lower(): col for col in df.columns}
+    found_cols = {col.lower().replace('İ', 'i').replace('I', 'ı'): col for col in df.columns}
     
+    # Debug found columns
+    print(f"📄 EXCEL COLS FOUND: {list(found_cols.keys())}")
+
+    # Helper to safe normalize
+    def normalize(text):
+        return str(text).lower().replace('İ', 'i').replace('I', 'ı').strip()
+
+    # Re-build normalized map
+    found_cols = {normalize(col): col for col in df.columns}
+
     for field, keys in keywords.items():
         for key in keys:
-            # Find a match in existing columns
-            match = next((c for c in found_cols if key in c), None)
+            norm_key = normalize(key)
+            # Match if key is IN column name
+            match = next((c for c in found_cols if norm_key in c), None)
             if match:
                 col_map[field] = found_cols[match]
                 break
+
     
     # Validation: We strictly need Barcode, Quantity
     if "barcode" not in col_map or "quantity" not in col_map:
@@ -122,9 +134,20 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
                 stock = 0
                 
         # Calculate Net Sales (Tutar)
-        # Formula: (Unit Price * Qty) - Discount/VAT
-        gross_total = unit_price * quantity
-        net_sales = gross_total - discount_vat
+        # Tutar (Net Sales) - Either from file or calculated
+        net_sales = 0.0
+        if "total_price" in col_map:
+             try:
+                val = row[col_map["total_price"]]
+                net_sales = float(val) if pd.notna(val) else 0.0
+             except:
+                net_sales = 0.0
+
+        # Calculate Net Sales if missing but we have unit price
+        if net_sales == 0.0 and unit_price > 0:
+            gross_total = unit_price * quantity
+            net_sales = gross_total - discount_vat
+            
         if net_sales < 0:
             net_sales = 0.0 # Should not be negative usually
             
