@@ -22,10 +22,39 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
     
     # Read Excel file
     try:
-        # Load into DataFrame
-        df = pd.read_excel(io.BytesIO(content))
+    # Load into DataFrame
+    # Try reading first few rows to find the header
+    try:
+        # Read first 20 rows without header to inspect content
+        df_preview = pd.read_excel(io.BytesIO(content), header=None, nrows=20)
     except Exception as e:
         raise ValueError(f"Could not parse Excel file: {str(e)}")
+
+    # Helper to safe normalize
+    def normalize(text):
+        if not isinstance(text, str):
+            text = str(text) if pd.notna(text) else ""
+        return text.lower().replace('İ', 'i').replace('I', 'ı').strip()
+
+    header_row_index = 0
+    max_matches = 0
+    
+    # Critical keywords to identify header row
+    search_keywords = ["barkod", "barcode", "code", "kod", "urun adi", "urun", "product"]
+
+    for idx, row in df_preview.iterrows():
+        # Count how many critical keywords appear in this row
+        row_str = " ".join([normalize(val) for val in row.values])
+        matches = sum(1 for k in search_keywords if k in row_str)
+        
+        if matches > max_matches:
+            max_matches = matches
+            header_row_index = idx
+
+    print(f"🔎 DETECTED HEADER ROW: {header_row_index} (matches: {max_matches})")
+    
+    # Re-read dataframe with correct header
+    df = pd.read_excel(io.BytesIO(content), header=header_row_index)
 
     # Normalize column names to lowercase and strip whitespace for matching
     df.columns = [str(col).strip() for col in df.columns]
@@ -50,10 +79,6 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
     
     # Debug found columns
     print(f"📄 EXCEL COLS FOUND: {list(found_cols.keys())}")
-
-    # Helper to safe normalize
-    def normalize(text):
-        return str(text).lower().replace('İ', 'i').replace('I', 'ı').strip()
 
     # Re-build normalized map
     found_cols = {normalize(col): col for col in df.columns}
