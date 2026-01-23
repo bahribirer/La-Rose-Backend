@@ -21,10 +21,10 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
     """
     
     # Read Excel file
+    # Read Excel file
     try:
-    # Load into DataFrame
-    # Try reading first few rows to find the header
-    try:
+        # Load into DataFrame
+        # Try reading first few rows to find the header
         # Read first 20 rows without header to inspect content
         df_preview = pd.read_excel(io.BytesIO(content), header=None, nrows=20)
     except Exception as e:
