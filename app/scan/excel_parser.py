@@ -92,7 +92,8 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
     # 🔹 DATE EXTRACTION BACKUP (Metadata Rows)
     # If no date column found, scan the first 20 rows of original preview for a date pattern
     if "date" not in col_map:
-        date_pattern = re.compile(r'\d{1,2}[./-]\d{1,2}[./-]\d{2,4}')
+        # Regex for DD.MM.YYYY or YYYY-MM-DD
+        date_pattern = re.compile(r'(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})|(\d{4}[./-]\d{1,2}[./-]\d{1,2})')
         extracted_date = None
         
         # Scan preview rows again
@@ -105,16 +106,17 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
                 break
         
         if extracted_date:
-            # We'll assign this global date to every row later
             col_map["global_date"] = extracted_date
 
-    
-    # Validation: We strictly need Barcode, Quantity
-    if "barcode" not in col_map or "quantity" not in col_map:
-        missing = []
-        if "barcode" not in col_map: missing.append("Barkod/Barcode")
-        if "quantity" not in col_map: missing.append("Satılan Adet/Quantity")
-        raise ValueError(f"Missing required columns: {', '.join(missing)}")
+    # Helper to standardize date string
+    def parse_and_format_date(raw_val):
+        if not raw_val: return None
+        try:
+            # Let pandas handle the parsing logic
+            dt = pd.to_datetime(raw_val, dayfirst=True) # Prefer DD/MM/YYYY
+            return dt.strftime("%d.%m.%Y")
+        except:
+            return str(raw_val) # Fallback to original string
 
     items = []
     
@@ -140,12 +142,12 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
         # Date Extraction
         date_val = None
         if "global_date" in col_map:
-             date_val = col_map["global_date"]
+             date_val = parse_and_format_date(col_map["global_date"])
         elif "date" in col_map:
             try:
                 val = row[col_map["date"]]
                 if pd.notna(val):
-                    date_val = str(val) # Convert to string for now to be safe
+                    date_val = parse_and_format_date(val)
             except:
                 date_val = None
 
