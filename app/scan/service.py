@@ -247,6 +247,7 @@ async def scan_report_excel(binary: bytes) -> dict:
                 "maliyet": i["maliyet"],
                 "birim_fiyat": i["birim_fiyat"],
                 "tutar": i["tutar"],
+                "date": i.get("date"), # ✅ FIX: Passthrough date to mobile
             }
             for i in items
         ]
