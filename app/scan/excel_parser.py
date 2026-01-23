@@ -72,6 +72,18 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
                     return col_name
         return None
 
+    # Define keywords for each target field
+    keywords = {
+        "date": ["tarih", "date", "zaman", "donem", "islem tarihi"],
+        "barcode": ["barkod", "barcode", "code", "kod", "urun kodu", "mal numarasi"],
+        "product_name": ["ürün adı", "urun adi", "product", "name", "isim", "aciklama", "malzem aciklamasi"],
+        "quantity": ["satılan adet", "miktar", "quantity", "adet", "satis adedi", "qty", "sayi"],
+        "stock": ["stok", "stock", "mevcut", "kalan"],
+        "unit_price": ["birim fiyat", "fiyat", "price", "unit price", "satis fiyati", "perakende", "sf"],
+        "discount_vat": ["iskonto", "kdv", "discount", "vat", "vergi", "indirim"],
+        "total_price": ["net satış", "net satis", "tutar", "toplam", "satis tutari", "ciro", "revenue"]
+    }
+
     for field, keys in keywords.items():
         match = find_column(keys, df.columns)
         if match:
