@@ -24,8 +24,19 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
                 title=title,
                 body=body,
             ),
-            data=data or {},
+            data={
+                **(data or {}),
+                "click_action": "FLUTTER_NOTIFICATION_CLICK"
+            },
             tokens=tokens,
+            apns=messaging.APNSConfig(
+                payload=messaging.APNSPayload(
+                    aps=messaging.Aps(
+                        sound="default",
+                        badge=1,
+                    ),
+                ),
+            ),
         )
 
         response = messaging.send_each_for_multicast(message)
