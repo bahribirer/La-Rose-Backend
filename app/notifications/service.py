@@ -1,10 +1,59 @@
 from datetime import datetime
 from app.core.database import db
 from bson import ObjectId
+from firebase_admin import messaging
+
+async def send_push_notification(user_id: ObjectId, title: str, body: str, data: dict = None):
+    """
+    Sends a Firebase Cloud Message to the user's registered devices.
+    """
+    try:
+        user = await db.users.find_one({"_id": user_id})
+        if not user or not user.get("device_tokens"):
+            return
+
+        tokens = user["device_tokens"]
+        # Remove empty tokens just in case
+        tokens = [t for t in tokens if t]
+        
+        if not tokens:
+            return
+
+        message = messaging.MulticastMessage(
+            notification=messaging.Notification(
+                title=title,
+                body=body,
+            ),
+            data=data or {},
+            tokens=tokens,
+        )
+
+        response = messaging.send_multicast(message)
+        print(f"🔥 FCM SENT: {response.success_count} success, {response.failure_count} failure")
+        
+        # Optional: Clean up invalid tokens
+        if response.failure_count > 0:
+            responses = response.responses
+            failed_tokens = []
+            for idx, resp in enumerate(responses):
+                if not resp.success:
+                    # Check for invalid token errors
+                    # err_code = resp.exception.code
+                     failed_tokens.append(tokens[idx])
+            
+            if failed_tokens:
+                await db.users.update_one(
+                    {"_id": user_id},
+                    {"$pull": {"device_tokens": {"$in": failed_tokens}}}
+                )
+                print(f"🧹 Removed {len(failed_tokens)} invalid tokens")
+
+    except Exception as e:
+        print(f"❌ FCM ERROR: {e}")
 
 async def create_notification(user_id: ObjectId, title: str, body: str, type: str = "info"):
     """
-    Creates a persistent notification in MongoDB.
+    Creates a persistent notification in MongoDB and sends a Push Notification.
     """
     notification = {
         "user_id": user_id,
@@ -17,6 +66,9 @@ async def create_notification(user_id: ObjectId, title: str, body: str, type: st
     
     await db.notifications.insert_one(notification)
     print(f"✅ NOTIFICATION SAVED TO DB: {title} -> {user_id}")
+
+    # 🔥 SEND COMPANION PUSH
+    await send_push_notification(user_id, title, body, data={"type": type})
 
 async def create_admin_notification(title: str, body: str, type: str = "goal_reached", data: dict = None):
     """
