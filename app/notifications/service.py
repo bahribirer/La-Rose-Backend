@@ -28,7 +28,7 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
             tokens=tokens,
         )
 
-        response = messaging.send_multicast(message)
+        response = messaging.send_each_for_multicast(message)
         print(f"🔥 FCM SENT: {response.success_count} success, {response.failure_count} failure")
         
         # Optional: Clean up invalid tokens
