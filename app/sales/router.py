@@ -52,6 +52,7 @@ async def save_sales_from_scan(
     monthly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
         "createdAt": {"$gte": month_start, "$lt": next_month},
+        "is_competition_report": {"$ne": True}
     })
 
     if monthly_count >= 4:
@@ -139,6 +140,7 @@ async def list_sales_reports(
     monthly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
         "createdAt": {"$gte": month_start, "$lt": next_month},
+        "is_competition_report": {"$ne": True}
     })
 
     # ====== PAGINATION ======

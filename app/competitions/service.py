@@ -113,7 +113,13 @@ async def get_user_competition_status(user_id: ObjectId):
             "competition_id": last["_id"],
         })
 
-        if not joined:
+        if joined:
+             return {
+                "status": "ended",
+                "competition": last,
+            }
+        
+        else:
             return {
                 "status": "missed",
                 "competition": last,

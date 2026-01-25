@@ -601,7 +601,8 @@ async def admin_user_detail(user_id: str):
     
     current_month_count = await db.sales_reports.count_documents({
         "user_id": u["_id"],
-        "createdAt": {"$gte": month_start}
+        "createdAt": {"$gte": month_start},
+        "is_competition_report": {"$ne": True}
     })
 
     # 3️⃣ COMPETITION INFO
