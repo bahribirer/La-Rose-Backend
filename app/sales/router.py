@@ -49,10 +49,19 @@ async def save_sales_from_scan(
         )
 
     # ================== AYLIK KONTROL (MAX 4) ==================
+    # 🔥 COMPLETED Yarışmaları bul
+    completed_cursor = db.competitions.find({"status": "completed"})
+    completed_ids = []
+    async for c in completed_cursor:
+        completed_ids.append(c["_id"])
+
     monthly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
         "createdAt": {"$gte": month_start, "$lt": next_month},
-        "is_competition_report": {"$ne": True}
+        "$or": [
+            {"is_competition_report": {"$ne": True}}, 
+            {"competition_id": {"$nin": completed_ids}}
+        ]
     })
 
     if monthly_count >= 4:
@@ -137,10 +146,19 @@ async def list_sales_reports(
         "createdAt": {"$gte": week_start, "$lt": week_end},
     })
 
+    # 🔥 COMPLETED Yarışmaları bul (Bu ay etkileyebilecek)
+    completed_cursor = db.competitions.find({"status": "completed"})
+    completed_ids = []
+    async for c in completed_cursor:
+        completed_ids.append(c["_id"])
+
     monthly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
         "createdAt": {"$gte": month_start, "$lt": next_month},
-        "is_competition_report": {"$ne": True}
+        "$or": [
+            {"is_competition_report": {"$ne": True}}, 
+            {"competition_id": {"$nin": completed_ids}}
+        ]
     })
 
     # ====== PAGINATION ======
