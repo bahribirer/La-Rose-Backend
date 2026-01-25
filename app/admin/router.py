@@ -861,6 +861,7 @@ async def admin_competition_participants(competition_id: str):
         "competition": {
             "year": competition["year"],
             "month": competition["month"],
+            "status": competition.get("status"),
         },
         "participants": participants
     }
