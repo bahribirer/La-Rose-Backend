@@ -71,10 +71,22 @@ async def save_sales_from_scan(
             "competition_id": competition_id
         }
     else:
-        # Yarışmada değilsek: Sadece normal raporları sayıyoruz
+        # Yarışmada değilsek: Sadece bu yarışmadan SONRAKİ normal raporları sayıyoruz
         visibility_query = {
             "is_competition_report": {"$ne": True}
         }
+        
+        # Son biten yarışmayı bul
+        last_ended_comp = await db.competitions.find_one(
+            {"status": "completed"},
+            sort=[("ends_at", -1)]
+        )
+        if last_ended_comp:
+            visibility_query["createdAt"] = {"$gte": last_ended_comp["ends_at"]}
+            print(f"🕒 Normal mode: Only showing reports after {last_ended_comp['ends_at']}")
+        else:
+            # Yarışma yoksa en azından bu ayınkileri göster
+            visibility_query["createdAt"] = {"$gte": month_start}
 
     # HAFTALIK KONTROL (Mevcut modumuzda raporumuz var mı?)
     weekly_reports = await db.sales_reports.find({
@@ -181,10 +193,20 @@ async def list_sales_reports(
             "competition_id": active_comp_id
         }
     else:
-        # 📄 NORMAL MOD: Sadece normal raporları göster (Yarışma raporlarını gizle)
+        # 📄 NORMAL MOD: Sadece en son biten yarışmadan sonraki normal raporları göster
         visibility_query = {
             "is_competition_report": {"$ne": True}
         }
+        
+        # Son biten yarışmayı bul
+        last_ended_comp = await db.competitions.find_one(
+            {"status": "completed"},
+            sort=[("ends_at", -1)]
+        )
+        if last_ended_comp:
+            visibility_query["createdAt"] = {"$gte": last_ended_comp["ends_at"]}
+        else:
+            visibility_query["createdAt"] = {"$gte": month_start}
 
     # ====== COUNTS (For UI Progress Bars) ======
     weekly_count = await db.sales_reports.count_documents({
