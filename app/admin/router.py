@@ -743,12 +743,25 @@ async def admin_finish_competition(competition_id: str):
     if comp.get("status") != "active":
         raise HTTPException(400, "Only active competitions can be finished")
 
+    now = datetime.utcnow()
+
+    # 1️⃣ Yarışmayı Bitir
     await db.competitions.update_one(
         { "_id": comp["_id"] },
         {
             "$set": {
                 "status": "completed",
-                "ended_at": datetime.utcnow(),
+                "ended_at": now,
+            }
+        }
+    )
+
+    # 2️⃣ Katılımcıların da bittiği tarihi işle
+    await db.competition_participants.update_many(
+        { "competition_id": comp["_id"] },
+        {
+            "$set": {
+                "finished_at": now
             }
         }
     )
