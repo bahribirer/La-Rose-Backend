@@ -77,8 +77,9 @@ async def save_sales_from_scan(
             detail="Bu ay en fazla 4 rapor yükleyebilirsiniz"
         )
 
-    # ================== AKTİF YARIŞMA ==================
+    # ================== AKTİF YARIŞMA (Sadece 'active' ise) ==================
     competition = await db.competitions.find_one({
+        "status": "active",
         "starts_at": {"$lte": now},
         "ends_at": {"$gte": now},
     })
@@ -95,6 +96,39 @@ async def save_sales_from_scan(
         if accepted:
             is_competition_report = True
             competition_id = competition["_id"]
+
+    # ================== HAFTA KONTROLU (MAX 1/hafta) ==================
+    # 🔥 Eğer yarışma bittiyse (completed_ids listesindeyse) o raporları saymıyoruz.
+    exclusion_query = {
+        "$or": [
+            {"is_competition_report": {"$ne": True}}, 
+            {"competition_id": {"$nin": completed_ids}}
+        ]
+    }
+
+    weekly_reports = await db.sales_reports.find({
+        "user_id": current_user["_id"],
+        "createdAt": {"$gte": week_start, "$lt": week_end},
+        **exclusion_query
+    }).to_list(None)
+
+    weekly_count = len(weekly_reports)
+
+    if weekly_count >= 1:
+        # 🔥 ÖZEL DURUM: Eğer bir "normal" rapor varsa ve şu an "yarışma" raporu yüklüyorsak, 
+        # kullanıcı isteği üzerine normal olanı siliyoruz (silip yarışma moduna geçme).
+        if is_competition_report:
+            normal_report = next((r for r in weekly_reports if not r.get("is_competition_report")), None)
+            if normal_report:
+                # Sil ve devam et
+                await db.sales_items.delete_many({"report_id": normal_report["_id"]})
+                await db.sales_reports.delete_one({"_id": normal_report["_id"]})
+                weekly_count -= 1 
+            else:
+                # Eğer zaten yarışma raporu varsa veya silinecek normal rapor yoksa hata ver
+                raise HTTPException(status_code=400, detail="Bu hafta zaten yarışma raporu yüklediniz")
+        else:
+            raise HTTPException(status_code=400, detail="Bu hafta zaten rapor yüklediniz")
 
     # ================== KAYDET ==================
     result = await save_scan_report(
@@ -120,7 +154,7 @@ async def save_sales_from_scan(
         "message": "Scan raporu kaydedildi",
         "report_id": result["report_id"],
         "is_competition_report": is_competition_report,
-        "weekly_used": 1,
+        "weekly_used": weekly_count + 1,
         "weekly_limit": 1,
         "monthly_used": monthly_count + 1,
         "monthly_limit": 4,
