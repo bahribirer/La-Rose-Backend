@@ -36,48 +36,14 @@ async def save_sales_from_scan(
     week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
     week_end = week_start + timedelta(days=7)
 
-    # ================== AY/HAFTA KONTROLU (MAX 1/hafta, 4/ay) ==================
+    # ================== 1️⃣ COMPETITION MODE DETERMINATION ==================
     # 🔥 COMPLETED Yarışmaları bul (Bunlar limitleri etkilememeli)
     completed_cursor = db.competitions.find({"status": "completed"})
     completed_ids = []
     async for c in completed_cursor:
         completed_ids.append(c["_id"])
 
-    # Exclusion Query
-    exclusion_query = {
-        "$or": [
-            {"is_competition_report": {"$ne": True}}, 
-            {"competition_id": {"$nin": completed_ids}}
-        ]
-    }
-
-    # 1️⃣ HAFTALIK KONTROL
-    weekly_count = await db.sales_reports.count_documents({
-        "user_id": current_user["_id"],
-        "createdAt": {"$gte": week_start, "$lt": week_end},
-        **exclusion_query
-    })
-
-    if weekly_count >= 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Bu hafta zaten rapor yüklediniz"
-        )
-
-    # 2️⃣ AYLIK KONTROL
-    monthly_count = await db.sales_reports.count_documents({
-        "user_id": current_user["_id"],
-        "createdAt": {"$gte": month_start, "$lt": next_month},
-        **exclusion_query
-    })
-
-    if monthly_count >= 4:
-        raise HTTPException(
-            status_code=400,
-            detail="Bu ay en fazla 4 rapor yükleyebilirsiniz"
-        )
-
-    # ================== AKTİF YARIŞMA (Sadece 'active' ise) ==================
+    # 🔥 AKTİF YARIŞMA (Sadece 'active' ise)
     competition = await db.competitions.find_one({
         "status": "active",
         "starts_at": {"$lte": now},
@@ -92,45 +58,53 @@ async def save_sales_from_scan(
             "competition_id": competition["_id"],
             "user_id": current_user["_id"],
         })
-
         if accepted:
             is_competition_report = True
             competition_id = competition["_id"]
 
-    # ================== HAFTA KONTROLU (MAX 1/hafta) ==================
-    # 🔥 Eğer yarışma bittiyse (completed_ids listesindeyse) o raporları saymıyoruz.
-    exclusion_query = {
-        "$or": [
-            {"is_competition_report": {"$ne": True}}, 
-            {"competition_id": {"$nin": completed_ids}}
-        ]
-    }
+    # ================== 2️⃣ VISIBILITY & LIMIT LOGIC ==================
+    # 🏎️ Modumuza göre kimi "gördüğümüzü" ve kimi "limit" saydığımızı belirliyoruz
+    if is_competition_report:
+        # Yarışmadaysak: Sadece bu yarışmanın raporlarını sayıyoruz
+        visibility_query = {
+            "is_competition_report": True,
+            "competition_id": competition_id
+        }
+    else:
+        # Yarışmada değilsek: Sadece normal raporları sayıyoruz
+        visibility_query = {
+            "is_competition_report": {"$ne": True}
+        }
 
+    # HAFTALIK KONTROL (Mevcut modumuzda raporumuz var mı?)
     weekly_reports = await db.sales_reports.find({
         "user_id": current_user["_id"],
         "createdAt": {"$gte": week_start, "$lt": week_end},
-        **exclusion_query
+        **visibility_query
     }).to_list(None)
 
     weekly_count = len(weekly_reports)
 
     if weekly_count >= 1:
-        # 🔥 ÖZEL DURUM: Eğer bir "normal" rapor varsa ve şu an "yarışma" raporu yüklüyorsak, 
-        # kullanıcı isteği üzerine normal olanı siliyoruz (silip yarışma moduna geçme).
-        if is_competition_report:
-            normal_report = next((r for r in weekly_reports if not r.get("is_competition_report")), None)
-            if normal_report:
-                # Sil ve devam et
-                await db.sales_items.delete_many({"report_id": normal_report["_id"]})
-                await db.sales_reports.delete_one({"_id": normal_report["_id"]})
-                weekly_count -= 1 
-            else:
-                # Eğer zaten yarışma raporu varsa veya silinecek normal rapor yoksa hata ver
-                raise HTTPException(status_code=400, detail="Bu hafta zaten yarışma raporu yüklediniz")
-        else:
-            raise HTTPException(status_code=400, detail="Bu hafta zaten rapor yüklediniz")
+        raise HTTPException(
+            status_code=400,
+            detail="Bu hafta zaten rapor yüklediniz"
+        )
 
-    # ================== KAYDET ==================
+    # AYLIK KONTROL
+    monthly_count = await db.sales_reports.count_documents({
+        "user_id": current_user["_id"],
+        "createdAt": {"$gte": month_start, "$lt": next_month},
+        **visibility_query
+    })
+
+    if monthly_count >= 4:
+        raise HTTPException(
+            status_code=400,
+            detail="Bu ay en fazla 4 rapor yükleyebilirsiniz"
+        )
+
+    # ================== 3️⃣ SAVING ==================
     result = await save_scan_report(
         user=current_user,
         items=payload.items,
