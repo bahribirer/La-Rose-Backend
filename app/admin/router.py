@@ -895,8 +895,19 @@ async def admin_competition_participants(competition_id: str):
         {
             "$lookup": {
                 "from": "sales_reports",
-                "localField": "_id",
-                "foreignField": "user_id",
+                "let": { "uid": "$_id" },
+                "pipeline": [
+                    { 
+                        "$match": { 
+                            "$expr": { 
+                                "$and": [
+                                    { "$eq": ["$user_id", "$$uid"] },
+                                    { "$eq": ["$competition_id", ObjectId(competition_id)] }
+                                ]
+                            }
+                        } 
+                    }
+                ],
                 "as": "reports"
             }
         },

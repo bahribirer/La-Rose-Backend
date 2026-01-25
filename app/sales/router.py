@@ -279,6 +279,7 @@ async def export_user_reports(
     year: Optional[int] = Query(None),
     columns: Optional[str] = Query(None), # Comma separated keys
     pharmacy: Optional[str] = Query(None), # Filter by pharmacy name
+    competition_id: Optional[str] = Query(None), # 🔥 Filter by competition
     current_user=Depends(admin_required),
 ):
     # Parse IDs
@@ -339,6 +340,13 @@ async def export_user_reports(
         start = datetime(year, month, 1)
         end = (start + timedelta(days=32)).replace(day=1)
         query["createdAt"] = {"$gte": start, "$lt": end}
+
+    if competition_id:
+        if ObjectId.is_valid(competition_id):
+            query["competition_id"] = ObjectId(competition_id)
+            # Eğer competition_id varsa tarih filtresine gerek yok/yarışmanın kendi tarihleri geçerli
+            if "createdAt" in query:
+                del query["createdAt"]
 
     reports = []
     async for r in db.sales_reports.find(query):
