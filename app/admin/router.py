@@ -793,6 +793,11 @@ async def admin_finish_competition(competition_id: str):
     )
 
     # 2️⃣ Katılımcıların da bittiği tarihi işle
+    await db.competition_participants.update_many(
+        { "competition_id": comp["_id"] },
+        {
+            "$set": {
+                "finished_at": now
             }
         }
     )
