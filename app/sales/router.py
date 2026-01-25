@@ -181,39 +181,55 @@ async def list_sales_reports(
     week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
     week_end = week_start + timedelta(days=7)
 
-    # 🔥 COMPLETED Yarışmaları bul (Limitleri etkilememeli)
-    completed_cursor = db.competitions.find({"status": "completed"})
-    completed_ids = []
-    async for c in completed_cursor:
-        completed_ids.append(c["_id"])
+    # ====== COMPETITION MODE CHECK ======
+    active_comp = await db.competitions.find_one({
+        "status": "active",
+        "starts_at": {"$lte": now},
+        "ends_at": {"$gte": now},
+    })
+    
+    is_in_active_competition = False
+    active_comp_id = None
+    if active_comp:
+        participant = await db.competition_participants.find_one({
+            "competition_id": active_comp["_id"],
+            "user_id": current_user["_id"]
+        })
+        if participant:
+            is_in_active_competition = True
+            active_comp_id = active_comp["_id"]
 
-    exclusion_query = {
-        "$or": [
-            {"is_competition_report": {"$ne": True}}, 
-            {"competition_id": {"$nin": completed_ids}}
-        ]
-    }
+    # ====== BUILD QUERY ======
+    if is_in_active_competition:
+        # 🏎️ YARIŞMA MODU: Sadece bu yarışmaya ait raporları göster
+        visibility_query = {
+            "is_competition_report": True,
+            "competition_id": active_comp_id
+        }
+    else:
+        # 📄 NORMAL MOD: Sadece normal raporları göster (Yarışma raporlarını gizle)
+        visibility_query = {
+            "is_competition_report": {"$ne": True}
+        }
 
+    # ====== COUNTS (For UI Progress Bars) ======
     weekly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
         "createdAt": {"$gte": week_start, "$lt": week_end},
-        **exclusion_query
+        **visibility_query
     })
 
     monthly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
         "createdAt": {"$gte": month_start, "$lt": next_month},
-        **exclusion_query
+        **visibility_query
     })
 
-    # ====== PAGINATION ======
+    # ====== PAGINATION & LISTING ======
     skip = (page - 1) * limit
     query = {
         "user_id": current_user["_id"],
-        "$or": [
-            {"is_competition_report": {"$ne": True}}, 
-            {"competition_id": {"$nin": completed_ids}}
-        ]
+        **visibility_query
     }
 
     total = await db.sales_reports.count_documents(query)
