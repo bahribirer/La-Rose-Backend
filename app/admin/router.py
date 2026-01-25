@@ -556,6 +556,7 @@ async def admin_user_detail(user_id: str):
     if not ObjectId.is_valid(user_id):
         raise HTTPException(400, "Invalid user id")
 
+    # 1️⃣ AGGREGATION (Lifetime Stats)
     pipeline = [
         { "$match": { "_id": ObjectId(user_id) } },
 
@@ -594,6 +595,34 @@ async def admin_user_detail(user_id: str):
 
     u = doc[0]
 
+    # 2️⃣ CONTEXT-AWARE COUNTS (Reset Logic)
+    now = datetime.utcnow()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    current_month_count = await db.sales_reports.count_documents({
+        "user_id": u["_id"],
+        "createdAt": {"$gte": month_start}
+    })
+
+    # 3️⃣ COMPETITION INFO
+    last_comp_info = None
+    
+    # En son katıldığı yarışmayı bul
+    last_participation = await db.competition_participants.find_one(
+        { "user_id": u["_id"] }, 
+        sort=[("accepted_at", -1)]
+    )
+
+    if last_participation:
+        comp = await db.competitions.find_one({"_id": last_participation["competition_id"]})
+        if comp:
+            last_comp_info = {
+                "id": str(comp["_id"]),
+                "status": comp.get("status"),
+                "year": comp["year"],
+                "month": comp["month"],
+            }
+
     return {
         "id": str(u["_id"]),
         "name": u.get("full_name"),
@@ -601,10 +630,16 @@ async def admin_user_detail(user_id: str):
         "pharmacy": u.get("profile", {}).get("pharmacy_name"),
         "region": u.get("profile", {}).get("region"),
         "representative": u.get("profile", {}).get("representative"),
+        
+        # Lifetime Stats
         "total_reports": u.get("total_reports", 0),
         "total_items": u.get("total_items", 0),
         "total_profit": u.get("total_profit", 0),
         "total_revenue": u.get("total_profit", 0) + u.get("total_cost", 0),
+
+        # Context Stats (for UI Reset & Download)
+        "current_month_reports": current_month_count,
+        "competition": last_comp_info
     }
 
 
