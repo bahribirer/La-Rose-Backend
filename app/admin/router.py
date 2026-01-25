@@ -793,14 +793,28 @@ async def admin_finish_competition(competition_id: str):
     )
 
     # 2️⃣ Katılımcıların da bittiği tarihi işle
-    await db.competition_participants.update_many(
-        { "competition_id": comp["_id"] },
-        {
-            "$set": {
-                "finished_at": now
             }
         }
     )
+
+    # 3️⃣ Bildirim Gönder (Mobilin Yenilenmesi İçin)
+    from app.notifications.service import create_notification
+    
+    participants_cursor = db.competition_participants.find({ "competition_id": comp["_id"] })
+    
+    # Send individually or bulk? For simplicity and to use existing service, loop.
+    # Ideally use a bulk service if available, but for now loop is acceptable for typical participant counts.
+    async for p in participants_cursor:
+        await create_notification(
+            user_id=p["user_id"],
+            title="Yarışma Sona Erdi",
+            body=f"{comp['month']}/{comp['year']} yarışması tamamlanmıştır.",
+            type="competition_ended",
+            data={
+                "competition_id": str(comp["_id"]),
+                "refresh": "true"
+            }
+        )
 
     return { "status": "completed" }
 
