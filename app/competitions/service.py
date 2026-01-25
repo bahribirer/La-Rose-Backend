@@ -98,7 +98,14 @@ async def get_user_competition_status(user_id: ObjectId):
             "can_register_next": is_registration_period_tr(),
         }
 
-    # 2️⃣ SON YARIŞMA (BITMIS, IP TAL EDILMEMIS)
+    # 2️⃣ KAYIT AÇIK AMA YARIŞMA YOK (NEXT > LAST)
+    if next_comp and is_registration_period_tr() :
+        return {
+            "status": "registration_open",
+            "competition": next_comp,
+        }
+
+    # 3️⃣ SON YARIŞMA (BITMIS, IP TAL EDILMEMIS)
     last = await db.competitions.find_one(
         {
             "status": { "$in": ["completed"] },   # 🔥 iptal hariç
@@ -125,12 +132,5 @@ async def get_user_competition_status(user_id: ObjectId):
                 "competition": last,
                 "can_register_next": is_registration_period_tr(),
             }
-
-    # 3️⃣ KAYIT AÇIK AMA YARIŞMA YOK
-    if next_comp and is_registration_period_tr() :
-        return {
-            "status": "registration_open",
-            "competition": next_comp,
-        }
 
     return {"status": "none"}

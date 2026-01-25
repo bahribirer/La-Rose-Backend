@@ -163,7 +163,13 @@ async def list_sales_reports(
 
     # ====== PAGINATION ======
     skip = (page - 1) * limit
-    query = {"user_id": current_user["_id"]}
+    query = {
+        "user_id": current_user["_id"],
+        "$or": [
+            {"is_competition_report": {"$ne": True}}, 
+            {"competition_id": {"$nin": completed_ids}}
+        ]
+    }
 
     total = await db.sales_reports.count_documents(query)
 
