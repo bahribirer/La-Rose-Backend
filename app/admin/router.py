@@ -224,6 +224,7 @@ async def admin_reports():
             "name": r.get("name"),
             "createdAt": r.get("createdAt"),
             "summary": summary,
+            "is_competition_report": bool(r.get("is_competition_report", False)),
         })
 
     return items
