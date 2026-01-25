@@ -39,5 +39,4 @@ async def activate_competition_by_admin(competition_id: ObjectId):
 
     await db.competition_registrations.delete_many({
         "competition_id": competition_id,
-        "status": "registered",
     })
