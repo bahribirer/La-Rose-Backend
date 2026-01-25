@@ -36,10 +36,26 @@ async def save_sales_from_scan(
     week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
     week_end = week_start + timedelta(days=7)
 
-    # ================== HAFTALIK KONTROL (MAX 1) ==================
+    # ================== AY/HAFTA KONTROLU (MAX 1/hafta, 4/ay) ==================
+    # 🔥 COMPLETED Yarışmaları bul (Bunlar limitleri etkilememeli)
+    completed_cursor = db.competitions.find({"status": "completed"})
+    completed_ids = []
+    async for c in completed_cursor:
+        completed_ids.append(c["_id"])
+
+    # Exclusion Query
+    exclusion_query = {
+        "$or": [
+            {"is_competition_report": {"$ne": True}}, 
+            {"competition_id": {"$nin": completed_ids}}
+        ]
+    }
+
+    # 1️⃣ HAFTALIK KONTROL
     weekly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
         "createdAt": {"$gte": week_start, "$lt": week_end},
+        **exclusion_query
     })
 
     if weekly_count >= 1:
@@ -48,20 +64,11 @@ async def save_sales_from_scan(
             detail="Bu hafta zaten rapor yüklediniz"
         )
 
-    # ================== AYLIK KONTROL (MAX 4) ==================
-    # 🔥 COMPLETED Yarışmaları bul
-    completed_cursor = db.competitions.find({"status": "completed"})
-    completed_ids = []
-    async for c in completed_cursor:
-        completed_ids.append(c["_id"])
-
+    # 2️⃣ AYLIK KONTROL
     monthly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
         "createdAt": {"$gte": month_start, "$lt": next_month},
-        "$or": [
-            {"is_competition_report": {"$ne": True}}, 
-            {"competition_id": {"$nin": completed_ids}}
-        ]
+        **exclusion_query
     })
 
     if monthly_count >= 4:
@@ -140,25 +147,29 @@ async def list_sales_reports(
     week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
     week_end = week_start + timedelta(days=7)
 
-    # ====== COUNTS ======
-    weekly_count = await db.sales_reports.count_documents({
-        "user_id": current_user["_id"],
-        "createdAt": {"$gte": week_start, "$lt": week_end},
-    })
-
-    # 🔥 COMPLETED Yarışmaları bul (Bu ay etkileyebilecek)
+    # 🔥 COMPLETED Yarışmaları bul (Limitleri etkilememeli)
     completed_cursor = db.competitions.find({"status": "completed"})
     completed_ids = []
     async for c in completed_cursor:
         completed_ids.append(c["_id"])
 
-    monthly_count = await db.sales_reports.count_documents({
-        "user_id": current_user["_id"],
-        "createdAt": {"$gte": month_start, "$lt": next_month},
+    exclusion_query = {
         "$or": [
             {"is_competition_report": {"$ne": True}}, 
             {"competition_id": {"$nin": completed_ids}}
         ]
+    }
+
+    weekly_count = await db.sales_reports.count_documents({
+        "user_id": current_user["_id"],
+        "createdAt": {"$gte": week_start, "$lt": week_end},
+        **exclusion_query
+    })
+
+    monthly_count = await db.sales_reports.count_documents({
+        "user_id": current_user["_id"],
+        "createdAt": {"$gte": month_start, "$lt": next_month},
+        **exclusion_query
     })
 
     # ====== PAGINATION ======
