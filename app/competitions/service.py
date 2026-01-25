@@ -78,6 +78,9 @@ async def get_user_competition_status(user_id: ObjectId):
                     "auto": True,
                 })
 
+                # 🔥 CLEANUP: Remove from registrations
+                await db.competition_registrations.delete_one({"_id": registered["_id"]})
+
                 return {
                     "status": "accepted",
                     "competition": current,

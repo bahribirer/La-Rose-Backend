@@ -37,10 +37,7 @@ async def activate_competition_by_admin(competition_id: ObjectId):
             "source": "admin_activation",
         })
 
-    await db.competition_registrations.update_many(
-        {
-            "competition_id": competition_id,
-            "status": "registered",
-        },
-        { "$set": { "status": "active" } }
-    )
+    await db.competition_registrations.delete_many({
+        "competition_id": competition_id,
+        "status": "registered",
+    })
