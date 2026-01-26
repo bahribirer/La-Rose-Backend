@@ -676,6 +676,9 @@ async def get_scoreboard(
 ]
 
 
+    print("🏁 COMPETITION DATES:", competition["starts_at"], "->", competition["ends_at"])
+    print("📋 PIPELINE MATCH:", pipeline[0]["$match"])
+
     cursor = db.sales_reports.aggregate(pipeline)
 
     results = []
@@ -694,6 +697,8 @@ async def get_scoreboard(
         })
 
     print("📊 RESULT COUNT:", len(results))
+    if results:
+        print("🥇 FIRST RESULT:", results[0])
 
     return {
         "my_user_id": str(current_user["_id"]),
