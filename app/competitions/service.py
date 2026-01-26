@@ -93,7 +93,7 @@ async def get_user_competition_status(user_id: ObjectId):
 
         # Eğer yarışma var ama ben katılmamışsam (missed) 
         # VE kayıt dönemi değilse -> 'missed' ekranı
-        if not is_finished_individually and not is_registration_period_tr():
+        if not is_finished_individually:
              return {
                 "status": "missed",
                 "competition": current,
