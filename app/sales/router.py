@@ -46,14 +46,14 @@ async def save_sales_from_scan(
     # 🔥 AKTİF YARIŞMA (Sadece 'active' ise)
     competition = await db.competitions.find_one({
         "status": "active",
-        "starts_at": {"$lte": now},
-        "ends_at": {"$gte": now},
+        # "starts_at": {"$lte": now}, # 🔥 RELAXED: Active ise tarih bekleme
     })
 
     is_competition_report = False
     competition_id = None
 
     if competition:
+        # 1. Zaten katılımcı mı?
         accepted = await db.competition_participants.find_one({
             "competition_id": competition["_id"],
             "user_id": current_user["_id"],
@@ -62,9 +62,19 @@ async def save_sales_from_scan(
                 {"finished_at": {"$gt": now}}
             ]
         })
-        if accepted:
+
+        # 2. Kayıtlı mı? (Henüz kabul edilmemiş ama kayıtlı)
+        registered = False
+        if not accepted:
+            registered = await db.competition_registrations.find_one({
+                "competition_id": competition["_id"],
+                "user_id": current_user["_id"],
+            })
+
+        if accepted or registered:
             is_competition_report = True
             competition_id = competition["_id"]
+            print(f"🏆 COMPETITION REPORT TAGGED (User: {current_user['_id']}, Comp: {competition['year']}-{competition['month']})")
 
     # ================== 2️⃣ VISIBILITY & LIMIT LOGIC ==================
     # 🏎️ Modumuza göre kimi "gördüğümüzü" ve kimi "limit" saydığımızı belirliyoruz
@@ -573,10 +583,17 @@ async def get_scoreboard(
         })
 
     else:
+        # 🔥 Önce "active" olanı bul (Erken başlamış olabilir)
         competition = await db.competitions.find_one({
-            "starts_at": {"$lte": now},
-            "ends_at": {"$gte": now},
+            "status": "active",
         })
+        
+        # Eğer active yoksa, tarihi gelmiş olanı bul (fallback)
+        if not competition:
+            competition = await db.competitions.find_one({
+                "starts_at": {"$lte": now},
+                "ends_at": {"$gte": now},
+            })
 
         if not competition:
             raise HTTPException(403, "competition_missed")
@@ -624,20 +641,19 @@ async def get_scoreboard(
     # ================= 3️⃣ SCOREBOARD PIPELINE =================
 
     pipeline = [
-    {
-        "$match": {
-            **user_match,
-
-            # 🔥 SADECE YARIŞMA RAPORLARI
-            "is_competition_report": True,
-            "competition_id": competition["_id"],
-
-            "createdAt": {
-                "$gte": competition["starts_at"],
-                "$lte": competition["ends_at"],
-            },
-        }
-    },
+        {
+            "$match": {
+                **user_match,
+                
+                # 🔥 RELAXED FILTER: 
+                # Yarışma raporu olarak işaretlenmiş OLSUN YA DA OLMASIN,
+                # tarih aralığındaysa ve kullanıcı katılımcıysa sayıyoruz.
+                "createdAt": {
+                    "$gte": competition["starts_at"],
+                    "$lte": competition["ends_at"],
+                },
+            }
+        },
     {
         "$group": {
             "_id": "$user_id",

@@ -207,8 +207,22 @@ async def admin_reports():
         .sort("createdAt", -1)
     )
 
-    items = []
+    # ================== 1️⃣ COMPETITION MAP ==================
+    comp_ids = set()
+    temp_items = []
     async for r in cursor:
+        if r.get("competition_id"):
+            comp_ids.add(r["competition_id"])
+        temp_items.append(r)
+
+    comp_map = {}
+    if comp_ids:
+        async for c in db.competitions.find({"_id": {"$in": list(comp_ids)}}):
+            comp_map[c["_id"]] = {"year": c["year"], "month": c["month"]}
+
+    # ================== 2️⃣ BUILD RESPONSE ==================
+    items = []
+    for r in temp_items:
         summary = r.get("summary", {
             "total_items": 0,
             "total_profit": 0,
@@ -219,12 +233,19 @@ async def admin_reports():
         if "total_revenue" not in summary:
             summary["total_revenue"] = summary.get("total_sales") or (summary.get("total_profit", 0) + summary.get("total_cost", 0))
 
+        # 📂 FOLDER INFO
+        folder = None
+        cid = r.get("competition_id")
+        if cid and cid in comp_map:
+            folder = comp_map[cid]
+
         items.append({
             "id": str(r["_id"]),
             "name": r.get("name"),
             "createdAt": r.get("createdAt"),
             "summary": summary,
             "is_competition_report": bool(r.get("is_competition_report", False)),
+            "folder": folder, # 🔥 Frontend bunu kullanacak
         })
 
     return items
