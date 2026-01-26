@@ -14,16 +14,31 @@ cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
 
 # 🔥 KRİTİK: Firebase Başlatma
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_PATH
-cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
 
 def get_firebase_app():
+    # 💥 FORCE RESET: Delete existing app to ensure credentials are re-loaded
     try:
-        return firebase_admin.get_app("rosap")
+        existing_app = firebase_admin.get_app("rosap")
+        firebase_admin.delete_app(existing_app)
+        print("♻️ EXISTING APP DELETED FOR RE-AUTH")
     except ValueError:
-        return firebase_admin.initialize_app(cred, name="rosap")
+        pass
+
+    # 🔐 FORCE SCOPES
+    print("🔐 CREATING SCOPED CREDENTIALS...")
+    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
+    if hasattr(cred, 'create_scoped'):
+        cred = cred.create_scoped([
+            "https://www.googleapis.com/auth/firebase.messaging",
+            "https://www.googleapis.com/auth/cloud-platform"
+        ])
+    
+    return firebase_admin.initialize_app(cred, name="rosap")
 
 # Initialize default app as well for other services
 if not firebase_admin._apps:
+    print("🔥 INITIALIZING DEFAULT APP...")
+    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
     firebase_admin.initialize_app(cred)
 else:
     # Ensure default app has credentials too
