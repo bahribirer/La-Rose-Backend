@@ -9,9 +9,13 @@ if not SERVICE_ACCOUNT_PATH:
 
 cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
 
-# 🔥 KRİTİK GUARD
+# 🔥 KRİTİK: Firebase Başlatma
 if not firebase_admin._apps:
+    print(f"🔥 INITIALIZING FIREBASE ADMIN with: {SERVICE_ACCOUNT_PATH}")
+    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
     firebase_admin.initialize_app(cred)
+else:
+    print("✅ FIREBASE ADMIN ALREADY INITIALIZED")
 
 def verify_firebase_token(token: str) -> dict:
     return auth.verify_id_token(

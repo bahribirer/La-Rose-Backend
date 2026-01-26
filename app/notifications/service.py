@@ -51,7 +51,9 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
             ),
         )
 
-        response = messaging.send_each_for_multicast(message)
+        # 🔥 Force use of default app to ensure credentials are used
+        default_app = firebase_admin.get_app()
+        response = messaging.send_each_for_multicast(message, app=default_app)
         print(f"🔥 FCM SENT: {response.success_count} success, {response.failure_count} failure")
         
         # Optional: Clean up invalid tokens
