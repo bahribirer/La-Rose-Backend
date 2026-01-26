@@ -3,7 +3,8 @@ from app.core.database import db
 from app.core import firebase
 from bson import ObjectId
 import firebase_admin
-from firebase_admin import messaging
+from firebase_admin import messaging, credentials
+import os
 
 async def send_push_notification(user_id: ObjectId, title: str, body: str, data: dict = None):
     """
@@ -22,7 +23,8 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
         target_token = tokens[-1]
         print(f"📡 SENDING PUSH TO LAST TOKEN for USER {user_id}: {target_token}")
 
-        message = messaging.MulticastMessage(
+        # 🚀 FCM v1: SINGLE MESSAGE SEND
+        message = messaging.Message(
             notification=messaging.Notification(
                 title=title,
                 body=body,
@@ -31,7 +33,7 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
                 **(data or {}),
                 "click_action": "FLUTTER_NOTIFICATION_CLICK"
             },
-            tokens=[target_token],
+            token=target_token,
             apns=messaging.APNSConfig(
                 headers={
                     "apns-priority": "10",
@@ -52,29 +54,30 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
             ),
         )
 
-        # 🔥 Force use of default app to ensure credentials are used
-        default_app = firebase_admin.get_app()
-        response = messaging.send_each_for_multicast(message, app=default_app)
-        print(f"🔥 FCM SENT: {response.success_count} success, {response.failure_count} failure")
-        
-        # Optional: Clean up invalid tokens
-        if response.failure_count > 0:
-            responses = response.responses
-            failed_tokens = []
-            for idx, resp in enumerate(responses):
-                if not resp.success:
-                    print(f"❌ FCM TOKEN FAILURE [{idx}]: {resp.exception}")
-                    failed_tokens.append(tokens[idx])
+        # 🔥 Force use of default app instance and log state
+        try:
+            app = firebase_admin.get_app()
+            print(f"📡 APP STATE: {app.name} (has_cred: {hasattr(app, '_credential')})")
             
-            if failed_tokens:
-                await db.users.update_one(
-                    {"_id": user_id},
-                    {"$pull": {"device_tokens": {"$in": failed_tokens}}}
-                )
-                print(f"🧹 Removed {len(failed_tokens)} invalid tokens")
-
+            # Eğer hala auth hatası varsa, Certificate'i manuel zorla
+            response = messaging.send(message, app=app)
+            print(f"🔥 FCM SUCCESS: {response}")
+            return response
+        except messaging.UnregisteredError:
+             # Token artık geçerli değil, temizle
+            print(f"🧹 Removing unregistered token for user {user_id}: {target_token}")
+            await db.users.update_one(
+                {"_id": user_id},
+                {"$pull": {"device_tokens": target_token}}
+            )
+        except Exception as e:
+            print(f"❌ FCM SEND ERROR: {type(e).__name__}: {str(e)}")
+            # Eğer hata 'authentication' ise belirt
+            if "authentication" in str(e).lower():
+                print("🚨 AUTHENTICATION PROBLEM: Check service account or scopes.")
+            
     except Exception as e:
-        print(f"❌ FCM ERROR: {e}")
+        print(f"❌ GENERAL PUSH ERROR: {str(e)}")
 
 async def create_notification(user_id: ObjectId, title: str, body: str, type: str = "info"):
     """
