@@ -638,14 +638,16 @@ async def get_scoreboard(
 
     # ================= 3️⃣ SCOREBOARD PIPELINE =================
 
+    print(f"🕵️ CHECKING ID: {competition['_id']} (Type: {type(competition['_id'])})")
+    
+    # Debug: DB'de bu ID'ye sahip kaç rapor var?
+    debug_count = await db.sales_reports.count_documents({"competition_id": competition["_id"]})
+    print(f"🧐 DB REPORT COUNT FOR THIS ID: {debug_count}")
+
     pipeline = [
         {
             "$match": {
                 **user_match,
-                
-                # 🔥 STRICT ID FILTER: 
-                # Sadece bu yarışma ID'sine sahip raporlar.
-                # Tarih veya başka bir şeye bakmıyoruz. ID yoksa sayılmaz.
                 "competition_id": competition["_id"],
             }
         },
