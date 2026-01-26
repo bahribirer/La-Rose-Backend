@@ -615,28 +615,25 @@ async def get_scoreboard(
     print("🏁 COMPETITION:", competition["year"], competition["month"])
 
     # ================= 2️⃣ USER FILTER =================
+    
+    # 🔥 ARTIK HER AY İÇİN (Geçmiş/Şu an) Sadece Katılımcıları Getir
+    # Eskiden "geçmiş ay -> herkes" demiştik ama bu hatalı (tüm userları getiriyor).
+    # Artık geçmişte de kim katıldıysa sadece o gözüksün.
+    
+    participants_cursor = db.competition_participants.find({
+        "competition_id": competition["_id"]
+    })
+    
+    participants = [p["user_id"] async for p in participants_cursor]
+    print("👥 PARTICIPANTS:", participants)
 
-    if filter in ["previousMonths", "lastMonth"]:
-        # 🔥 geçmiş ay → HERKES
-        user_match = {}
-    else:
-        # 🔥 aktif ay → sadece katılanlar
-        participants = [
-            p["user_id"]
-            async for p in db.competition_participants.find({
-                "competition_id": competition["_id"]
-            })
-        ]
+    if not participants:
+        return {
+            "my_user_id": str(current_user["_id"]),
+            "items": [],
+        }
 
-        print("👥 PARTICIPANTS:", participants)
-
-        if not participants:
-            return {
-                "my_user_id": str(current_user["_id"]),
-                "items": [],
-            }
-
-        user_match = {"user_id": {"$in": participants}}
+    user_match = {"user_id": {"$in": participants}}
 
     # ================= 3️⃣ SCOREBOARD PIPELINE =================
 
