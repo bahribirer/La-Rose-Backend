@@ -566,24 +566,20 @@ async def get_scoreboard(
 
     # ================= 1️⃣ COMPETITION BUL =================
 
-    if filter == "previousMonths":
-        if not year or not month:
-            raise HTTPException(400, "year and month required")
-
+    # 🎯 ÖNCELİK: Yıl ve Ay verilmişse direkt o yarışmayı bul (Filter ne olursa olsun)
+    if year and month:
         competition = await db.competitions.find_one({
             "year": year,
             "month": month,
         })
-
     elif filter == "lastMonth":
         prev = now.replace(day=1) - timedelta(days=1)
         competition = await db.competitions.find_one({
             "year": prev.year,
             "month": prev.month,
         })
-
     else:
-        # 🔥 Önce "active" olanı bul (Erken başlamış olabilir)
+        # 🔥 Aktif ay: Önce "active" olanı bul (Erken başlamış olabilir)
         competition = await db.competitions.find_one({
             "status": "active",
         })
@@ -595,14 +591,18 @@ async def get_scoreboard(
                 "ends_at": {"$gte": now},
             })
 
-        if not competition:
-            raise HTTPException(403, "competition_missed")
+    # 🛡️ GÜVENLİK BARİYERİ
+    if not competition:
+        if year and month: # Geçmiş ay istenmiş ama yoksa hata verme, boş dön
+             return {"my_user_id": str(current_user["_id"]), "items": []}
+        raise HTTPException(403, "competition_missed")
 
+    # 🔥 Aktif bir yarışma ise katılım kontrolü yap
+    if competition.get("status") == "active":
         accepted = await db.competition_participants.find_one({
             "competition_id": competition["_id"],
             "user_id": current_user["_id"],
         })
-
         if not accepted:
             raise HTTPException(403, "competition_not_accepted")
 
