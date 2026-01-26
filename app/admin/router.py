@@ -543,52 +543,44 @@ async def representative_users_with_competition(
 ):
     rep_name = unquote(name)
 
-    # 🔥 AY + YIL'A GÖRE YARIŞMA BUL
+    # 1️⃣ Yarışmayı bul (tüm statüler kabul, sadece yıla ve aya bakıyoruz)
     competition = await db.competitions.find_one({
         "year": year,
         "month": month,
-        "status": { "$in": ["active", "completed"] }
     })
 
-    if not competition:
-        return {
-            "competition": None,
-            "in_competition": [],
-            "not_in_competition": []
-        }
-
-    # 🔹 Bu mümessilin kullanıcıları
-    profiles = db.user_profiles.find({
+    # 2️⃣ Bu mümessilin tüm kullanıcılarını bul
+    profiles_cursor = db.user_profiles.find({
         "$or": [
             {"representative": rep_name},
             {"representative.name": rep_name},
         ]
     })
-
+    
     user_ids = []
-    async for p in profiles:
+    async for p in profiles_cursor:
         user_ids.append(p["user_id"])
 
-    # 🔹 Yarışmaya katılanlar
-    participants = db.competition_participants.find({
-        "competition_id": competition["_id"],
-        "user_id": {"$in": user_ids}
-    })
-
+    # 3️⃣ Katılanları belirle
     participant_ids = set()
-    async for p in participants:
-        participant_ids.add(p["user_id"])
+    if competition:
+        participants_cursor = db.competition_participants.find({
+            "competition_id": competition["_id"],
+            "user_id": {"$in": user_ids}
+        })
+        async for p in participants_cursor:
+            participant_ids.add(p["user_id"])
 
-    # 🔹 Kullanıcıları ayır
+    # 4️⃣ Kullanıcı detaylarını çek ve ayır
     users_cursor = db.users.find({ "_id": { "$in": user_ids } })
-
+    
     in_competition = []
     not_in_competition = []
 
     async for u in users_cursor:
         user_data = {
             "id": str(u["_id"]),
-            "name": u.get("full_name") or u.get("email"),
+            "name": u.get("full_name") or u.get("email") or "Bilinmeyen",
             "email": u.get("email"),
         }
 
@@ -599,8 +591,10 @@ async def representative_users_with_competition(
 
     return {
         "competition": {
-            "year": competition["year"],
-            "month": competition["month"],
+            "year": year,
+            "month": month,
+            "id": str(competition["_id"]) if competition else None,
+            "status": competition.get("status") if competition else "none"
         },
         "in_competition": in_competition,
         "not_in_competition": not_in_competition,
