@@ -12,6 +12,6 @@ numpy
 rapidfuzz
 google-cloud-documentai
 groq
-firebase-admin
+firebase-admin>=6.5.0
 openpyxl
 pandas

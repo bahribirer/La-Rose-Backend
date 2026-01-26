@@ -60,6 +60,15 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
         
         try:
             print(f"📡 SENDING via APP: {app.name}")
+            
+            # 🕵️ DIAGNOSTIC: Credential Check
+            try:
+                cred = app.credential.get_credential()
+                print(f"🔐 CREDENTIAL EMAIL: {cred.service_account_email}")
+                print(f"🔐 IS GOOGLE AUTH: {hasattr(cred, 'signer')}")
+            except Exception as e:
+                print(f"⚠️ REMOTE CRED DEBUG ERROR: {e}")
+
             response = messaging.send(message, app=app)
             print(f"🔥 FCM SUCCESS: {response}")
             return response
