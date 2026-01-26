@@ -84,8 +84,8 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
         if response.status_code == 200:
             print(f"🔥 RAW FCM SUCCESS: {response.json()}")
             return response.json()
-        elif response.status_code == 404 or "UNREGISTERED" in response.text:
-            print(f"🧹 Removing unregistered token: {target_token}")
+        elif response.status_code in [404, 400, 403] and ("UNREGISTERED" in response.text or "BadEnvironmentKeyInToken" in response.text):
+            print(f"🧹 Removing invalid token (Unregistered or Bad Env): {target_token}")
             await db.users.update_one(
                 {"_id": user_id},
                 {"$pull": {"device_tokens": target_token}}
