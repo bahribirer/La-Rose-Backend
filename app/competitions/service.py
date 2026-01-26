@@ -30,30 +30,18 @@ async def get_user_competition_status(user_id: ObjectId):
     now_tr_time = now_tr()
     now_utc = datetime.utcnow()
 
-    # 0️⃣ GELECEK AY (UPCOMING)
+    # 0️⃣ GELECEK YARIŞMA (UPCOMING) - Kayıt/Geri sayım için lazım
     next_comp = await db.competitions.find_one(
         {
-            "status": "upcoming",          # 🔥 filtre eklendi
+            "status": "upcoming",
             "starts_at": {"$gt": now_utc},
         },
         sort=[("starts_at", 1)]
     )
 
-    if next_comp:
-        registered_next = await db.competition_registrations.find_one({
-            "user_id": user_id,
-            "competition_id": next_comp["_id"],
-        })
-
-        if registered_next:
-            return {
-                "status": "registered",
-                "competition": next_comp,
-            }
-
-    # 1️⃣ AKTİF YARIŞMA
+    # 1️⃣ AKTİF YARIŞMA SORGUSU (En yüksek öncelik)
     current = await db.competitions.find_one({
-        "status": "active",                # 🔥 KRİTİK DÜZELTME
+        "status": "active",
         "starts_at": {"$lte": now_utc},
         "ends_at": {"$gte": now_utc},
     })
@@ -64,12 +52,25 @@ async def get_user_competition_status(user_id: ObjectId):
             "competition_id": current["_id"],
         })
 
+        # Bireysel Bitiş Kontrolü
+        is_finished_individually = False
+        if accepted and accepted.get("finished_at") and accepted["finished_at"] <= now_utc:
+            is_finished_individually = True
+
+        # Eğer yarışmadaysak ve bitirmemişsek -> Skorboard göster
+        if accepted and not is_finished_individually:
+            return {
+                "status": "accepted",
+                "competition": current,
+            }
+
+        # Eğer yeni ayın yarışmasına admin onay verdiyse (upcoming -> active olduysa) 
+        # ve kullanıcı geçen aydan kayıtlıysa otomatik kabul et.
         if not accepted:
             registered = await db.competition_registrations.find_one({
                 "user_id": user_id,
                 "competition_id": current["_id"],
             })
-
             if registered:
                 await db.competition_participants.insert_one({
                     "user_id": user_id,
@@ -77,49 +78,45 @@ async def get_user_competition_status(user_id: ObjectId):
                     "accepted_at": now_utc,
                     "auto": True,
                 })
-
-                # 🔥 CLEANUP: Remove from registrations
                 await db.competition_registrations.delete_one({"_id": registered["_id"]})
-
                 return {
                     "status": "accepted",
                     "competition": current,
                 }
 
-        if accepted:
-            # 🔥 BIREYSEL BITIŞ KONTROLÜ
-            if accepted.get("finished_at") and accepted["finished_at"] <= now_utc:
-                # Yarışma dünyada devam ediyor olsa bile BU kullanıcı bitmiş.
-                # 'none' döndürerek onu normal 0/4 hedeflerine çekiyoruz (Normal Mod).
-                return {
-                    "status": "none",
-                }
-                
-            return {
-                "status": "accepted",
+        # Eğer yarışma var ama ben katılmamışsam (missed) 
+        # VE kayıt dönemi değilse -> 'missed' ekranı
+        if not is_finished_individually and not is_registration_period_tr():
+             return {
+                "status": "missed",
                 "competition": current,
+                "can_register_next": is_registration_period_tr(),
             }
 
-        return {
-            "status": "missed",
-            "competition": current,
-            "can_register_next": is_registration_period_tr(),
-        }
+    # 2️⃣ GELECEK YARIŞMA KAYIT DURUMU (Öncelik: Kayıtlı mı? -> Kayıt Açık mı?)
+    if next_comp:
+        # Kayıtlı mıyım?
+        registered_next = await db.competition_registrations.find_one({
+            "user_id": user_id,
+            "competition_id": next_comp["_id"],
+        })
+        if registered_next:
+            return {
+                "status": "registered",
+                "competition": next_comp,
+            }
 
-    # 2️⃣ KAYIT AÇIK AMA YARIŞMA YOK (NEXT > LAST)
-    if next_comp and is_registration_period_tr() :
-        return {
-            "status": "registration_open",
-            "competition": next_comp,
-        }
+        # Kayıt açık mı?
+        if is_registration_period_tr():
+            return {
+                "status": "registration_open",
+                "competition": next_comp,
+            }
 
-    # 3️⃣ SON YARIŞMA (BITMIS, IP TAL EDILMEMIS)
+    # 3️⃣ SON YARIŞMA DURUMU (Ended)
     last = await db.competitions.find_one(
-        {
-            "status": { "$in": ["completed"] },   # 🔥 iptal hariç
-            "ends_at": {"$lt": now_utc},
-        },
-        sort=[("ends_at", -1)]
+        { "status": "completed" },
+        sort=[("ends_at", -1), ("ended_at", -1)]
     )
 
     if last:
@@ -127,18 +124,10 @@ async def get_user_competition_status(user_id: ObjectId):
             "user_id": user_id,
             "competition_id": last["_id"],
         })
-
         if joined:
              return {
                 "status": "ended",
                 "competition": last,
             }
-        
-        else:
-            return {
-                "status": "missed",
-                "competition": last,
-                "can_register_next": is_registration_period_tr(),
-            }
-
+    
     return {"status": "none"}
