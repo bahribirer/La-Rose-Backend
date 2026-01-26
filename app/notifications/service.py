@@ -54,12 +54,12 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
             ),
         )
 
-        # 🔥 Force use of default app instance and log state
+        # 🔥 Use the guaranteed app instance from core
+        from app.core.firebase import get_firebase_app
+        app = get_firebase_app()
+        
         try:
-            app = firebase_admin.get_app()
-            print(f"📡 APP STATE: {app.name} (has_cred: {hasattr(app, '_credential')})")
-            
-            # Eğer hala auth hatası varsa, Certificate'i manuel zorla
+            print(f"📡 SENDING via APP: {app.name}")
             response = messaging.send(message, app=app)
             print(f"🔥 FCM SUCCESS: {response}")
             return response

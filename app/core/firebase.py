@@ -13,16 +13,28 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_PATH
 cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
 
 # 🔥 KRİTİK: Firebase Başlatma
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = SERVICE_ACCOUNT_PATH
 cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
 
+def get_firebase_app():
+    try:
+        return firebase_admin.get_app("rosap")
+    except ValueError:
+        return firebase_admin.initialize_app(cred, name="rosap")
+
+# Initialize default app as well for other services
 if not firebase_admin._apps:
-    print(f"🔥 INITIALIZING FIREBASE ADMIN (NEW) with: {SERVICE_ACCOUNT_PATH}")
     firebase_admin.initialize_app(cred)
 else:
-    # Bazen default app sertifikasız başlamış olabilir (bazı kütüphaneler yüzünden)
-    print("✅ FIREBASE ADMIN ALREADY INITIALIZED (Updating to use Certificate)")
-    # Default app'i alıp credential'ını kontrol edemeyiz kolayca, but initialize_app with name=default will fail
-    # We just trust it for now OR we could re-initialize a named app.
+    # Ensure default app has credentials too
+    try:
+        default_app = firebase_admin.get_app()
+        # If we can't be sure it has creds, just use the named app elsewhere
+    except:
+        pass
+
+# Trigger initialization
+get_firebase_app()
 
 def verify_firebase_token(token: str) -> dict:
     return auth.verify_id_token(
