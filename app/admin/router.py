@@ -622,10 +622,10 @@ async def admin_user_detail(user_id: str):
             is_truly_active = (
                 comp.get("status") == "active" and 
                 comp["starts_at"] <= now <= comp["ends_at"] and
-                last_participation.get("finished_at") is None
+                (last_participation.get("finished_at") is None or last_participation["finished_at"] > now)
             )
             
-            if not is_truly_active and last_participation.get("finished_at"):
+            if not is_truly_active and last_participation.get("finished_at") and last_participation["finished_at"] <= now:
                 # Kullanıcı bireysel olarak bitmişse, admin panelinde onu "Normal Mod"da (0/4 hedef) gösterelim.
                 last_comp_info = None
             else:

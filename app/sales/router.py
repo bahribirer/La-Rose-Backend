@@ -57,7 +57,10 @@ async def save_sales_from_scan(
         accepted = await db.competition_participants.find_one({
             "competition_id": competition["_id"],
             "user_id": current_user["_id"],
-            "finished_at": None # 🔥 Bireysel bitiş kontrolü
+            "$or": [
+                {"finished_at": None},
+                {"finished_at": {"$gt": now}}
+            ]
         })
         if accepted:
             is_competition_report = True
@@ -87,7 +90,7 @@ async def save_sales_from_scan(
         # 2. Bireysel bitiş (Sadece bu kullanıcı için geçerli)
         # Yarışma 'active' olsa bile kullanıcı bitmiş olabilir.
         user_finish_doc = await db.competition_participants.find_one(
-            {"user_id": current_user["_id"], "finished_at": {"$ne": None}},
+            {"user_id": current_user["_id"], "finished_at": {"$lte": now}},
             sort=[("finished_at", -1)]
         )
         user_finish = user_finish_doc["finished_at"] if user_finish_doc else datetime.min
@@ -189,7 +192,10 @@ async def list_sales_reports(
         participant = await db.competition_participants.find_one({
             "competition_id": active_comp["_id"],
             "user_id": current_user["_id"],
-            "finished_at": None # 🔥 Bireysel bitiş kontrolü
+            "$or": [
+                {"finished_at": None},
+                {"finished_at": {"$gt": now}}
+            ]
         })
         if participant:
             is_in_active_competition = True
@@ -217,7 +223,7 @@ async def list_sales_reports(
         
         # 2. Bireysel bitiş
         user_finish_doc = await db.competition_participants.find_one(
-            {"user_id": current_user["_id"], "finished_at": {"$ne": None}},
+            {"user_id": current_user["_id"], "finished_at": {"$lte": now}},
             sort=[("finished_at", -1)]
         )
         user_finish = user_finish_doc["finished_at"] if user_finish_doc else datetime.min
