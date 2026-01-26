@@ -38,14 +38,8 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
                 },
                 payload=messaging.APNSPayload(
                     aps=messaging.Aps(
-                        alert=messaging.ApsAlert(
-                            title=title,
-                            body=body,
-                        ),
                         sound="default",
                         badge=1,
-                        mutable_content=True,
-                        content_available=True,
                     ),
                 ),
             ),
