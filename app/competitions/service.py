@@ -89,9 +89,10 @@ async def get_user_competition_status(user_id: ObjectId):
         if accepted:
             # 🔥 BIREYSEL BITIŞ KONTROLÜ
             if accepted.get("finished_at") and accepted["finished_at"] <= now_utc:
+                # Yarışma dünyada devam ediyor olsa bile BU kullanıcı bitmiş.
+                # 'none' döndürerek onu normal 0/4 hedeflerine çekiyoruz (Normal Mod).
                 return {
-                    "status": "ended",
-                    "competition": current,
+                    "status": "none",
                 }
                 
             return {

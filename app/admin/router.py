@@ -625,17 +625,17 @@ async def admin_user_detail(user_id: str):
                 last_participation.get("finished_at") is None
             )
             
-            status = comp.get("status")
             if not is_truly_active and last_participation.get("finished_at"):
-                status = "completed"
-
-            last_comp_info = {
-                "id": str(comp["_id"]),
-                "status": "active" if is_truly_active else status,
-                "year": comp["year"],
-                "month": comp["month"],
-                "is_finished_individually": last_participation.get("finished_at") is not None
-            }
+                # Kullanıcı bireysel olarak bitmişse, admin panelinde onu "Normal Mod"da (0/4 hedef) gösterelim.
+                last_comp_info = None
+            else:
+                last_comp_info = {
+                    "id": str(comp["_id"]),
+                    "status": "active" if is_truly_active else comp.get("status"),
+                    "year": comp["year"],
+                    "month": comp["month"],
+                    "is_finished_individually": last_participation.get("finished_at") is not None
+                }
 
     return {
         "id": str(u["_id"]),

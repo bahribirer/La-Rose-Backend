@@ -77,19 +77,25 @@ async def save_sales_from_scan(
             "is_competition_report": {"$ne": True}
         }
         
-        # Son biten yarışmayı bul (Gerçek bitiş zamanına göre)
+        # 1. Küresel bitiş (Herkes için geçerli)
         last_ended_comp = await db.competitions.find_one(
             {"status": "completed"},
             sort=[("ended_at", -1), ("ends_at", -1)]
         )
-        if last_ended_comp:
-            # Gerçek bitiş zamanını al (ended_at öncelikli)
-            finish_time = last_ended_comp.get("ended_at") or last_ended_comp.get("ends_at")
-            visibility_query["createdAt"] = {"$gte": finish_time}
-            print(f"🕒 Normal mode: Only showing reports after {finish_time}")
-        else:
-            # Yarışma yoksa en azından bu ayınkileri göster
-            visibility_query["createdAt"] = {"$gte": month_start}
+        global_finish = last_ended_comp.get("ended_at") or last_ended_comp.get("ends_at") if last_ended_comp else month_start
+        
+        # 2. Bireysel bitiş (Sadece bu kullanıcı için geçerli)
+        # Yarışma 'active' olsa bile kullanıcı bitmiş olabilir.
+        user_finish_doc = await db.competition_participants.find_one(
+            {"user_id": current_user["_id"], "finished_at": {"$ne": None}},
+            sort=[("finished_at", -1)]
+        )
+        user_finish = user_finish_doc["finished_at"] if user_finish_doc else datetime.min
+        
+        # En güncelini seçiyoruz
+        effective_finish = max(global_finish, user_finish)
+        visibility_query["createdAt"] = {"$gte": effective_finish}
+        print(f"🕒 Normal visibility threshold for {current_user['email']}: {effective_finish}")
 
     # HAFTALIK KONTROL (Mevcut modumuzda raporumuz var mı?)
     weekly_reports = await db.sales_reports.find({
@@ -202,16 +208,22 @@ async def list_sales_reports(
             "is_competition_report": {"$ne": True}
         }
         
-        # Son biten yarışmayı bul
+        # 1. Küresel bitiş
         last_ended_comp = await db.competitions.find_one(
             {"status": "completed"},
             sort=[("ended_at", -1), ("ends_at", -1)]
         )
-        if last_ended_comp:
-            finish_time = last_ended_comp.get("ended_at") or last_ended_comp.get("ends_at")
-            visibility_query["createdAt"] = {"$gte": finish_time}
-        else:
-            visibility_query["createdAt"] = {"$gte": month_start}
+        global_finish = last_ended_comp.get("ended_at") or last_ended_comp.get("ends_at") if last_ended_comp else month_start
+        
+        # 2. Bireysel bitiş
+        user_finish_doc = await db.competition_participants.find_one(
+            {"user_id": current_user["_id"], "finished_at": {"$ne": None}},
+            sort=[("finished_at", -1)]
+        )
+        user_finish = user_finish_doc["finished_at"] if user_finish_doc else datetime.min
+        
+        effective_finish = max(global_finish, user_finish)
+        visibility_query["createdAt"] = {"$gte": effective_finish}
 
     # ====== COUNTS (For UI Progress Bars) ======
     weekly_count = await db.sales_reports.count_documents({
