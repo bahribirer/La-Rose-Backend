@@ -91,7 +91,7 @@ async def get_top_users(start: datetime, end: datetime, limit: int = 10):
 # TOP PRODUCTS
 # =========================
 
-async def get_top_products(start: datetime, end: datetime, limit: int = 10):
+async def get_top_products(start: datetime, end: datetime, limit: Optional[int] = 10):
     pipeline = [
         {
             "$lookup": {
@@ -125,8 +125,10 @@ async def get_top_products(start: datetime, end: datetime, limit: int = 10):
             }
         },
         {"$sort": {"quantity": -1}},
-        {"$limit": limit},
     ]
+
+    if limit:
+        pipeline.append({"$limit": limit})
 
     cursor = db.sales_items.aggregate(pipeline)
 

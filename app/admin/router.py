@@ -30,8 +30,17 @@ async def admin_overview(
     return {
         "overview": await get_overview(start, end),
         "top_users": await get_top_users(start, end),
-        "top_products": await get_top_products(start, end),
+        "top_products": await get_top_products(start, end, limit=10),
     }
+
+
+@router.get("/products", dependencies=[Depends(admin_required)])
+async def admin_products_list(
+    start: datetime = Query(..., description="UTC datetime (ISO 8601)"),
+    end: datetime = Query(..., description="UTC datetime (ISO 8601)"),
+):
+    # Ürün detay sayfasında tüm ürünleri görmek için limit=None
+    return await get_top_products(start, end, limit=None)
 
 
 @router.get("/analytics/daily", dependencies=[Depends(admin_required)])
