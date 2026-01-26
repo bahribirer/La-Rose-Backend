@@ -887,14 +887,28 @@ async def admin_competition_participants(competition_id: str):
     if not competition:
         raise HTTPException(404, "Competition not found")
 
-    # 🔹 Yarışmaya katılan kullanıcılar
+    # 🔹 Yarışmaya katılan (kabul eden) kullanıcılar
     participants_cursor = db.competition_participants.find({
         "competition_id": competition["_id"]
     })
+    
+    # 🔹 Yarışmaya kayıtlı (henüz kabul etmemiş) kullanıcılar
+    registrations_cursor = db.competition_registrations.find({
+        "competition_id": competition["_id"]
+    })
 
-    user_ids = []
+    user_status_map = {} # user_id_str -> status
+    
     async for p in participants_cursor:
-        user_ids.append(p["user_id"])
+        user_status_map[str(p["user_id"])] = "accepted"
+        
+    async for r in registrations_cursor:
+        # Eğer zaten accepted ise (üstte eklendiyse) ezme
+        uid_str = str(r["user_id"])
+        if uid_str not in user_status_map:
+            user_status_map[uid_str] = "registered"
+
+    user_ids = [ObjectId(uid) for uid in user_status_map.keys()]
 
     if not user_ids:
         return {
@@ -943,16 +957,18 @@ async def admin_competition_participants(competition_id: str):
                 "email": 1,
                 "report_count": 1
             }
-        },
-
-        { "$sort": { "report_count": -1 } }
+        }
     ]
 
     cursor = db.users.aggregate(pipeline)
 
     participants = []
     async for u in cursor:
+        u["status"] = user_status_map.get(u["id"], "unknown")
         participants.append(u)
+
+    # Sıralama: Katıldı (accepted) önce, sonra rapor sayısı
+    participants.sort(key=lambda x: (x["status"] != "accepted", -x["report_count"]))
 
     return {
         "competition": {
