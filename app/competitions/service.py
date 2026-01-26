@@ -136,5 +136,11 @@ async def get_user_competition_status(user_id: ObjectId):
                 "status": "ended",
                 "competition": last,
             }
+        else:
+            return {
+                "status": "missed",
+                "competition": last,
+                "can_register_next": is_registration_period_tr(),
+            }
     
     return {"status": "none"}
