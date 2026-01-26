@@ -965,6 +965,8 @@ async def admin_competition_participants(competition_id: str):
             "participants": []
         }
 
+    print(f"📊 ADMIN COMP PARTICIPANTS | CompID: {competition_id} | Users to check: {len(user_ids)}")
+
     # 🔹 Kullanıcı + rapor sayısı
     pipeline = [
         { "$match": { "_id": { "$in": user_ids } } },
@@ -1012,6 +1014,9 @@ async def admin_competition_participants(competition_id: str):
     async for u in cursor:
         u["status"] = user_status_map.get(u["id"], "unknown")
         participants.append(u)
+        
+        if u["report_count"] > 0:
+             print(f"🔴 DEBUG USER {u['name']}: {u['report_count']} reports found for comp {competition_id}")
 
     # Sıralama: Katıldı (accepted) önce, sonra rapor sayısı
     participants.sort(key=lambda x: (x["status"] != "accepted", -x["report_count"]))
