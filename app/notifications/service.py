@@ -12,14 +12,13 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
         if not user or not user.get("device_tokens"):
             return
 
-        tokens = user["device_tokens"]
-        # Remove empty tokens just in case
-        tokens = [t for t in tokens if t]
-        
+        tokens = [t for t in user.get("device_tokens", []) if t]
         if not tokens:
             return
 
-        print(f"📡 SENDING PUSH TO {len(tokens)} TOKENS for USER {user_id}: {tokens}")
+        # 🎯 Sadece en son kaydedilen (güncel) cihaza gönder
+        target_token = tokens[-1]
+        print(f"📡 SENDING PUSH TO LAST TOKEN for USER {user_id}: {target_token}")
 
         message = messaging.MulticastMessage(
             notification=messaging.Notification(
@@ -30,7 +29,7 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
                 **(data or {}),
                 "click_action": "FLUTTER_NOTIFICATION_CLICK"
             },
-            tokens=tokens,
+            tokens=[target_token],
             apns=messaging.APNSConfig(
                 headers={
                     "apns-priority": "10",
