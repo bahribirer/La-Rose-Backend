@@ -19,6 +19,8 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
         if not tokens:
             return
 
+        print(f"📡 SENDING PUSH TO {len(tokens)} TOKENS for USER {user_id}: {tokens}")
+
         message = messaging.MulticastMessage(
             notification=messaging.Notification(
                 title=title,
@@ -30,10 +32,21 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
             },
             tokens=tokens,
             apns=messaging.APNSConfig(
+                headers={
+                    "apns-priority": "10",
+                    "apns-topic": "com.bahribirer.rosap",
+                },
                 payload=messaging.APNSPayload(
                     aps=messaging.Aps(
+                        alert=messaging.ApsAlert(
+                            title=title,
+                            body=body,
+                        ),
                         sound="default",
                         badge=1,
+                        mutable_content=True,
+                        content_available=True,
+                        interruption_level="active",
                     ),
                 ),
             ),
