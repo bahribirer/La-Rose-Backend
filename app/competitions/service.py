@@ -87,6 +87,13 @@ async def get_user_competition_status(user_id: ObjectId):
                 }
 
         if accepted:
+            # 🔥 BIREYSEL BITIŞ KONTROLÜ
+            if accepted.get("finished_at") and accepted["finished_at"] <= now_utc:
+                return {
+                    "status": "ended",
+                    "competition": current,
+                }
+                
             return {
                 "status": "accepted",
                 "competition": current,
