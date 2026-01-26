@@ -5,6 +5,8 @@ from bson import ObjectId
 import firebase_admin
 from firebase_admin import messaging, credentials
 import os
+import requests
+import json
 
 async def send_push_notification(user_id: ObjectId, title: str, body: str, data: dict = None):
     """
@@ -23,20 +25,13 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
         target_token = tokens[-1]
         print(f"📡 SENDING RAW HTTP PUSH to: {target_token}")
 
-        # 2. Manual Auth (Proven Working)
-        from google.oauth2 import service_account
-        from google.auth.transport.requests import Request
-        import os
-        import requests
-        import json
+        # 🔥 Use the guaranteed app instance from core
+        from app.core.firebase import get_firebase_app
+        app = get_firebase_app()
 
-        creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-        scopes = ["https://www.googleapis.com/auth/firebase.messaging"]
-        
-        creds = service_account.Credentials.from_service_account_file(creds_path, scopes=scopes)
-        creds.refresh(Request())
-        access_token = creds.token
-        project_id = creds.project_id
+        # Get credentials from the initialized app
+        access_token = app.credential.get_access_token().access_token
+        project_id = app.project_id
 
         # 3. Construct Raw Payload (FCM V1)
         endpoint = f"https://fcm.googleapis.com/v1/projects/{project_id}/messages:send"
