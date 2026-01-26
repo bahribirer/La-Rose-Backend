@@ -97,7 +97,7 @@ async def get_user_competition_status(user_id: ObjectId):
              return {
                 "status": "missed",
                 "competition": current,
-                "can_register_next": is_registration_period_tr(),
+                "can_register_next": is_registration_period_tr() and next_comp is not None,
             }
 
     # 2️⃣ GELECEK YARIŞMA KAYIT DURUMU (Öncelik: Kayıtlı mı? -> Kayıt Açık mı?)
@@ -135,12 +135,13 @@ async def get_user_competition_status(user_id: ObjectId):
              return {
                 "status": "ended",
                 "competition": last,
+                "can_register_next": is_registration_period_tr() and next_comp is not None,
             }
         else:
             return {
                 "status": "missed",
                 "competition": last,
-                "can_register_next": is_registration_period_tr(),
+                "can_register_next": is_registration_period_tr() and next_comp is not None,
             }
     
     return {"status": "none"}
