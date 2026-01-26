@@ -725,17 +725,42 @@ async def get_scoreboard_history(
     if not year or not month:
         raise HTTPException(400, "year & month required")
 
-    start = datetime(year, month, 1)
-    end = (
-        datetime(year + 1, 1, 1)
-        if month == 12
-        else datetime(year, month + 1, 1)
-    )
+    # ================= 1️⃣ COMPETITION BUL =================
+    competition = await db.competitions.find_one({
+        "year": year,
+        "month": month,
+    })
 
+    if not competition:
+        return {
+            "my_user_id": str(current_user["_id"]),
+            "competition": {"year": year, "month": month},
+            "items": [],
+        }
+
+    # ================= 2️⃣ PARTICIPANTS BUL =================
+    participants = []
+    async for p in db.competition_participants.find({"competition_id": competition["_id"]}):
+        participants.append(p["user_id"])
+
+    if not participants:
+        return {
+            "my_user_id": str(current_user["_id"]),
+            "competition": {"id": str(competition["_id"]), "year": year, "month": month},
+            "items": [],
+        }
+
+    # ================= 3️⃣ STRICT PIPELINE =================
     pipeline = [
         {
             "$match": {
-                "createdAt": {"$gte": start, "$lt": end}
+                "user_id": {"$in": participants},
+                "competition_id": competition["_id"],
+                # 🔥 STRICT DATE: Ay başı/sonu kuralına uymayanları (erken yüklenenler vb) ele
+                "createdAt": {
+                    "$gte": competition["starts_at"],
+                    "$lte": competition["ends_at"],
+                }
             }
         },
         {
@@ -746,13 +771,15 @@ async def get_scoreboard_history(
                 "total_items": {"$sum": "$summary.total_items"},
             }
         },
-        {"$sort": {
-    "total_items": -1,     # 🔥 ASIL SIRALAMA
-    "total_profit": -1     # (opsiyonel) eşitlik bozucu
-}},
-
+        {
+            "$addFields": {
+                "total_sales": {"$add": ["$total_profit", "$total_cost"]}
+            }
+        },
+        {"$sort": {"total_items": -1}},
     ]
 
+    print(f"🕵️ HISTORY DEBUG | {year}/{month} | CompID: {competition['_id']}")
     cursor = db.sales_reports.aggregate(pipeline)
 
     results = []
@@ -760,15 +787,18 @@ async def get_scoreboard_history(
         user = await db.users.find_one({"_id": r["_id"]})
         results.append({
             "user_id": str(r["_id"]),
-            "name": user.get("full_name") if user else "Kullanıcı",
-            "total_profit": r["total_profit"],
-            "total_items": r["total_items"],
+            "name": (user.get("full_name") or user.get("email")) if user else "Kullanıcı",
+            "total_sales": float(r.get("total_sales", 0)),
+            "total_profit": float(r.get("total_profit", 0)),
+            "total_items": int(r.get("total_items", 0)),
         })
-
 
     return {
         "my_user_id": str(current_user["_id"]),
+        "competition": {
+            "id": str(competition["_id"]),
+            "year": competition["year"],
+            "month": competition["month"],
+        },
         "items": results,
     }
-
-
