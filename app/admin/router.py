@@ -618,11 +618,19 @@ async def admin_user_detail(user_id: str):
     if last_participation:
         comp = await db.competitions.find_one({"_id": last_participation["competition_id"]})
         if comp:
+            # 🔥 GERÇEK STATUS KONTROLÜ (Tarih + Bireysel Bitiş)
+            is_truly_active = (
+                comp.get("status") == "active" and 
+                comp["starts_at"] <= now <= comp["ends_at"] and
+                last_participation.get("finished_at") is None
+            )
+            
             last_comp_info = {
                 "id": str(comp["_id"]),
-                "status": comp.get("status"),
+                "status": "active" if is_truly_active else comp.get("status"),
                 "year": comp["year"],
                 "month": comp["month"],
+                "is_finished_individually": last_participation.get("finished_at") is not None
             }
 
     return {

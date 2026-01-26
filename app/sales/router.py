@@ -57,6 +57,7 @@ async def save_sales_from_scan(
         accepted = await db.competition_participants.find_one({
             "competition_id": competition["_id"],
             "user_id": current_user["_id"],
+            "finished_at": None # 🔥 Bireysel bitiş kontrolü
         })
         if accepted:
             is_competition_report = True
@@ -181,7 +182,8 @@ async def list_sales_reports(
     if active_comp:
         participant = await db.competition_participants.find_one({
             "competition_id": active_comp["_id"],
-            "user_id": current_user["_id"]
+            "user_id": current_user["_id"],
+            "finished_at": None # 🔥 Bireysel bitiş kontrolü
         })
         if participant:
             is_in_active_competition = True
