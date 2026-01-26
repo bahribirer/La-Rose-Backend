@@ -59,9 +59,8 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
             failed_tokens = []
             for idx, resp in enumerate(responses):
                 if not resp.success:
-                    # Check for invalid token errors
-                    # err_code = resp.exception.code
-                     failed_tokens.append(tokens[idx])
+                    print(f"❌ FCM TOKEN FAILURE [{idx}]: {resp.exception}")
+                    failed_tokens.append(tokens[idx])
             
             if failed_tokens:
                 await db.users.update_one(
