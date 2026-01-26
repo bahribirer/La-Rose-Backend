@@ -981,7 +981,11 @@ async def admin_competition_participants(competition_id: str):
                             "$expr": { 
                                 "$and": [
                                     { "$eq": ["$user_id", "$$uid"] },
-                                    { "$eq": ["$competition_id", ObjectId(competition_id)] }
+                                    { "$eq": ["$competition_id", ObjectId(competition_id)] },
+                                    # 🔥 STRICT DATE FILTER:
+                                    # Admin panelinde de sadece takvim aralığındakileri say.
+                                    { "$gte": ["$createdAt", competition["starts_at"]] },
+                                    { "$lte": ["$createdAt", competition["ends_at"]] }
                                 ]
                             }
                         } 

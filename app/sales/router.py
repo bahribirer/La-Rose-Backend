@@ -647,7 +647,15 @@ async def get_scoreboard(
         {
             "$match": {
                 **user_match,
+                
+                # 🔥 STRICT ID & DATE FILTER: 
+                # 1. ID eşleşmeli.
+                # 2. Tarih aralığında olmalı (Erken başlayanları/eskiyi temizle).
                 "competition_id": competition["_id"],
+                "createdAt": {
+                    "$gte": competition["starts_at"],
+                    "$lte": competition["ends_at"],
+                },
             }
         },
     {
