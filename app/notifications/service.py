@@ -61,13 +61,25 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
         try:
             print(f"📡 SENDING via APP: {app.name}")
             
-            # 🕵️ DIAGNOSTIC: Credential Check
+            # 🕵️ DIAGNOSTIC: Manual Token Fetch
             try:
-                cred = app.credential.get_credential()
-                print(f"🔐 CREDENTIAL EMAIL: {cred.service_account_email}")
-                print(f"🔐 IS GOOGLE AUTH: {hasattr(cred, 'signer')}")
+                from google.oauth2 import service_account
+                from google.auth.transport.requests import Request
+                import os
+
+                print("🕵️ MANUAL TOKEN FETCH START...")
+                creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+                print(f"📂 PATH: {creds_path}")
+                
+                scoped_creds = service_account.Credentials.from_service_account_file(
+                    creds_path,
+                    scopes=["https://www.googleapis.com/auth/firebase.messaging"]
+                )
+                
+                scoped_creds.refresh(Request())
+                print(f"✅ MANUAL TOKEN FETCH SUCCESS! Token ends with: ...{scoped_creds.token[-10:]}")
             except Exception as e:
-                print(f"⚠️ REMOTE CRED DEBUG ERROR: {e}")
+                print(f"❌ MANUAL TOKEN FETCH FAILED: {e}")
 
             response = messaging.send(message, app=app)
             print(f"🔥 FCM SUCCESS: {response}")
