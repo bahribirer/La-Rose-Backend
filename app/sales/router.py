@@ -645,13 +645,20 @@ async def get_scoreboard(
             "$match": {
                 **user_match,
                 
-                # 🔥 RELAXED FILTER: 
-                # Yarışma raporu olarak işaretlenmiş OLSUN YA DA OLMASIN,
-                # tarih aralığındaysa ve kullanıcı katılımcıysa sayıyoruz.
-                "createdAt": {
-                    "$gte": competition["starts_at"],
-                    "$lte": competition["ends_at"],
-                },
+                # 🔥 SMART FILTER: 
+                # 1. Ya bu yarışmaya ait oldugu KESİN olanlar (ID var),
+                # 2. Ya da "KİMSESİZ" olup (ID yok) tarih aralığına girenler.
+                # (Başka yarışmaya ait olanları dışlıyoruz)
+                "$or": [
+                    {"competition_id": competition["_id"]},
+                    {
+                        "competition_id": {"$in": [None, False]},
+                        "createdAt": {
+                            "$gte": competition["starts_at"],
+                            "$lte": competition["ends_at"],
+                        },
+                    }
+                ]
             }
         },
     {
