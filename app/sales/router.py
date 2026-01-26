@@ -638,6 +638,27 @@ async def get_scoreboard(
 
         user_match = {"user_id": {"$in": participants}}
 
+    # ================= 2.5️⃣ AUTO-FIX ORPHANS =================
+    # 🔥 Kullanıcı isteği: "Tarih tutuyorsa ID'yi güncelle ve sadece ID'ye bak"
+    # Yetim raporları (ID yok) bu yarışmaya zimmetle.
+    if participants:
+        await db.sales_reports.update_many(
+            {
+                "user_id": {"$in": participants},
+                "competition_id": {"$in": [None, False]},
+                "createdAt": {
+                    "$gte": competition["starts_at"],
+                    "$lte": competition["ends_at"],
+                }
+            },
+            {
+                "$set": {
+                    "competition_id": competition["_id"],
+                    "is_competition_report": True
+                }
+            }
+        )
+
     # ================= 3️⃣ SCOREBOARD PIPELINE =================
 
     pipeline = [
@@ -645,20 +666,10 @@ async def get_scoreboard(
             "$match": {
                 **user_match,
                 
-                # 🔥 SMART FILTER: 
-                # 1. Ya bu yarışmaya ait oldugu KESİN olanlar (ID var),
-                # 2. Ya da "KİMSESİZ" olup (ID yok) tarih aralığına girenler.
-                # (Başka yarışmaya ait olanları dışlıyoruz)
-                "$or": [
-                    {"competition_id": competition["_id"]},
-                    {
-                        "competition_id": {"$in": [None, False]},
-                        "createdAt": {
-                            "$gte": competition["starts_at"],
-                            "$lte": competition["ends_at"],
-                        },
-                    }
-                ]
+                # 🔥 STRICT ID FILTER: 
+                # Artık veriyi düzelttik, sadece ID'si eşleşenleri alıyoruz.
+                # Başka yarışmaya ait olanlar (tarihi tutsa bile) elenir.
+                "competition_id": competition["_id"],
             }
         },
     {
