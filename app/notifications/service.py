@@ -2,6 +2,7 @@ from datetime import datetime
 from app.core.database import db
 from app.core import firebase
 from bson import ObjectId
+import firebase_admin
 from firebase_admin import messaging
 
 async def send_push_notification(user_id: ObjectId, title: str, body: str, data: dict = None):
