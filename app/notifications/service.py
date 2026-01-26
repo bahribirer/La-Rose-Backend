@@ -46,7 +46,6 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
                         badge=1,
                         mutable_content=True,
                         content_available=True,
-                        interruption_level="active",
                     ),
                 ),
             ),
