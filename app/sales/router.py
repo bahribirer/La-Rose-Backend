@@ -620,14 +620,17 @@ async def get_scoreboard(
     # Eskiden "geçmiş ay -> herkes" demiştik ama bu hatalı (tüm userları getiriyor).
     # Artık geçmişte de kim katıldıysa sadece o gözüksün.
     
-    participants_cursor = db.competition_participants.find({
-        "competition_id": competition["_id"]
-    })
+    participants = []
+    p_names = []
+    async for p in db.competition_participants.find({"competition_id": competition["_id"]}):
+        participants.append(p["user_id"])
+        u_info = await db.users.find_one({"_id": p["user_id"]})
+        p_names.append(u_info.get("full_name") or u_info.get("email") if u_info else "Unknown")
     
-    participants = [p["user_id"] async for p in participants_cursor]
-    print("👥 PARTICIPANTS:", participants)
+    print(f"👥 PARTICIPANTS ({len(participants)}): {p_names}")
 
     if not participants:
+        print("⚠️ NO PARTICIPANTS FOUND FOR THIS COMPETITION")
         return {
             "my_user_id": str(current_user["_id"]),
             "items": [],
