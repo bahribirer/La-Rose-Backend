@@ -76,14 +76,16 @@ async def save_sales_from_scan(
             "is_competition_report": {"$ne": True}
         }
         
-        # Son biten yarışmayı bul
+        # Son biten yarışmayı bul (Gerçek bitiş zamanına göre)
         last_ended_comp = await db.competitions.find_one(
             {"status": "completed"},
-            sort=[("ends_at", -1)]
+            sort=[("ended_at", -1), ("ends_at", -1)]
         )
         if last_ended_comp:
-            visibility_query["createdAt"] = {"$gte": last_ended_comp["ends_at"]}
-            print(f"🕒 Normal mode: Only showing reports after {last_ended_comp['ends_at']}")
+            # Gerçek bitiş zamanını al (ended_at öncelikli)
+            finish_time = last_ended_comp.get("ended_at") or last_ended_comp.get("ends_at")
+            visibility_query["createdAt"] = {"$gte": finish_time}
+            print(f"🕒 Normal mode: Only showing reports after {finish_time}")
         else:
             # Yarışma yoksa en azından bu ayınkileri göster
             visibility_query["createdAt"] = {"$gte": month_start}
@@ -201,10 +203,11 @@ async def list_sales_reports(
         # Son biten yarışmayı bul
         last_ended_comp = await db.competitions.find_one(
             {"status": "completed"},
-            sort=[("ends_at", -1)]
+            sort=[("ended_at", -1), ("ends_at", -1)]
         )
         if last_ended_comp:
-            visibility_query["createdAt"] = {"$gte": last_ended_comp["ends_at"]}
+            finish_time = last_ended_comp.get("ended_at") or last_ended_comp.get("ends_at")
+            visibility_query["createdAt"] = {"$gte": finish_time}
         else:
             visibility_query["createdAt"] = {"$gte": month_start}
 
