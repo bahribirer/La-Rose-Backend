@@ -636,6 +636,8 @@ async def get_scoreboard(
                 "items": [],
             }
 
+        user_match = {"user_id": {"$in": participants}}
+
     # ================= 3️⃣ SCOREBOARD PIPELINE =================
 
     print(f"🕵️ CHECKING ID: {competition['_id']} (Type: {type(competition['_id'])})")
