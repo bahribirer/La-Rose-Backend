@@ -53,10 +53,6 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
                     "click_action": "FLUTTER_NOTIFICATION_CLICK"
                 },
                 "apns": {
-                    "headers": {
-                        "apns-priority": "10",
-                        "apns-topic": "com.bahribirer.rosap"
-                    },
                     "payload": {
                         "aps": {
                             "alert": {
