@@ -207,45 +207,70 @@ async def admin_reports():
         .sort("createdAt", -1)
     )
 
-    # ================== 1️⃣ COMPETITION MAP ==================
-    comp_ids = set()
-    temp_items = []
-    async for r in cursor:
-        if r.get("competition_id"):
-            comp_ids.add(r["competition_id"])
-        temp_items.append(r)
+    # ================== 1️⃣ PREPARE DATA ==================
+    # Tüm yarışmaları çek (Tarih eşleşmesi için)
+    competitions = await db.competitions.find().to_list(None)
+    
+    # Kullanıcıları bul (İsim göstermek için)
+    user_ids = await db.sales_reports.distinct("user_id")
+    users = await db.users.find(
+        {"_id": {"$in": user_ids}},
+        {"_id": 1, "full_name": 1, "email": 1}
+    ).to_list(None)
+    
+    user_map = {
+        u["_id"]: (u.get("full_name") or u.get("email") or "Kullanıcı") 
+        for u in users
+    }
 
-    comp_map = {}
-    if comp_ids:
-        async for c in db.competitions.find({"_id": {"$in": list(comp_ids)}}):
-            comp_map[c["_id"]] = {"year": c["year"], "month": c["month"]}
-
-    # ================== 2️⃣ BUILD RESPONSE ==================
+    # ================== 2️⃣ PROCESS REPORTS ==================
     items = []
-    for r in temp_items:
+    async for r in cursor:
         summary = r.get("summary", {
             "total_items": 0,
             "total_profit": 0,
             "total_cost": 0,
         })
         
-        # 🔥 FIX: Calculate revenue on the fly if missing
         if "total_revenue" not in summary:
             summary["total_revenue"] = summary.get("total_sales") or (summary.get("total_profit", 0) + summary.get("total_cost", 0))
 
-        # 📂 FOLDER INFO
+        # 📂 FOLDER MAPPING
         folder = None
+        
+        # 1. Öncelik: Doğrudan ID
         cid = r.get("competition_id")
-        if cid and cid in comp_map:
-            folder = comp_map[cid]
+        if cid:
+            # ID üzerinden bul
+            comp = next((c for c in competitions if c["_id"] == cid), None)
+            if comp:
+                folder = {"year": comp["year"], "month": comp["month"]}
+        
+        # 2. Öncelik: Tarih Aralığı (ID yoksa)
+        if not folder and "createdAt" in r:
+            created = r["createdAt"]
+            # Hangi yarışmanın aralığında?
+            for c in competitions:
+                # Sadece active/completed yarışmalara bak
+                if c.get("status") not in ["active", "completed"]:
+                    continue
+                    
+                if c.get("starts_at") and c.get("ends_at"):
+                     if c["starts_at"] <= created <= c["ends_at"]:
+                         folder = {"year": c["year"], "month": c["month"]}
+                         break
+        
+        # 👤 USER NAME
+        user_name = user_map.get(r.get("user_id"), "Bilinmeyen Kullanıcı")
 
         items.append({
             "id": str(r["_id"]),
             "name": r.get("name"),
+            "user_name": user_name, # 🔥 Yeni Kolon
             "createdAt": r.get("createdAt"),
             "summary": summary,
             "is_competition_report": bool(r.get("is_competition_report", False)),
-            "folder": folder, # 🔥 Frontend bunu kullanacak
+            "folder": folder, # 🔥 Akıllı Gruplama
         })
 
     return items
