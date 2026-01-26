@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from app.core.database import db
 
 
