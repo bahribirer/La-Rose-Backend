@@ -33,7 +33,7 @@ async def get_user_competition_status(user_id: ObjectId):
     # 0️⃣ GELECEK YARIŞMA (UPCOMING) - Kayıt/Geri sayım için lazım
     next_comp = await db.competitions.find_one(
         {
-            "status": "upcoming",
+            "status": { "$in": ["upcoming", "active"] }, # 🔥 'active' olsa da henüz başlamamış olabilir
             "starts_at": {"$gt": now_utc},
         },
         sort=[("starts_at", 1)]
@@ -41,12 +41,19 @@ async def get_user_competition_status(user_id: ObjectId):
 
     # 1️⃣ AKTİF YARIŞMA SORGUSU (En yüksek öncelik)
     current = await db.competitions.find_one({
-        "status": "active",
+        "status": { "$in": ["active", "upcoming"] }, # 🔥 ZAMANI GELMİŞSE UPCOMING DE AKTİF SAYILIR
         "starts_at": {"$lte": now_utc},
         "ends_at": {"$gte": now_utc},
     })
 
     if current:
+        # 🛡️ OTO-AKTİVASYON (Admin başlatmayı unutmuşsa veya 1 Ocak geldiyse)
+        if current.get("status") == "upcoming":
+            await db.competitions.update_one(
+                {"_id": current["_id"]},
+                {"$set": {"status": "active", "activated_at": now_utc}}
+            )
+            current["status"] = "active" # Hafızada güncelle
         accepted = await db.competition_participants.find_one({
             "user_id": user_id,
             "competition_id": current["_id"],
