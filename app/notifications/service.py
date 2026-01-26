@@ -8,9 +8,10 @@ import os
 
 async def send_push_notification(user_id: ObjectId, title: str, body: str, data: dict = None):
     """
-    Sends a Firebase Cloud Message to the user's registered devices.
+    Sends a Firebase Cloud Message using RAW HTTP (Bypassing SDK Auth Issues).
     """
     try:
+        # 1. Get User & Token
         user = await db.users.find_one({"_id": user_id})
         if not user or not user.get("device_tokens"):
             return
@@ -19,86 +20,81 @@ async def send_push_notification(user_id: ObjectId, title: str, body: str, data:
         if not tokens:
             return
 
-        # 🎯 Sadece en son kaydedilen (güncel) cihaza gönder
         target_token = tokens[-1]
-        print(f"📡 SENDING PUSH TO LAST TOKEN for USER {user_id}: {target_token}")
+        print(f"📡 SENDING RAW HTTP PUSH to: {target_token}")
 
-        # 🚀 FCM v1: SINGLE MESSAGE SEND
-        message = messaging.Message(
-            notification=messaging.Notification(
-                title=title,
-                body=body,
-            ),
-            data={
-                **(data or {}),
-                "click_action": "FLUTTER_NOTIFICATION_CLICK"
-            },
-            token=target_token,
-            apns=messaging.APNSConfig(
-                headers={
-                    "apns-priority": "10",
-                    "apns-topic": "com.bahribirer.rosap",
-                },
-                payload=messaging.APNSPayload(
-                    aps=messaging.Aps(
-                        alert=messaging.ApsAlert(
-                            title=title,
-                            body=body,
-                        ),
-                        sound="default",
-                        badge=1,
-                        mutable_content=True,
-                        content_available=True,
-                    ),
-                ),
-            ),
-        )
+        # 2. Manual Auth (Proven Working)
+        from google.oauth2 import service_account
+        from google.auth.transport.requests import Request
+        import os
+        import requests
+        import json
 
-        # 🔥 Use the guaranteed app instance from core
-        from app.core.firebase import get_firebase_app
-        app = get_firebase_app()
+        creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        scopes = ["https://www.googleapis.com/auth/firebase.messaging"]
         
-        try:
-            print(f"📡 SENDING via APP: {app.name}")
-            
-            # 🕵️ DIAGNOSTIC: Manual Token Fetch
-            try:
-                from google.oauth2 import service_account
-                from google.auth.transport.requests import Request
-                import os
+        creds = service_account.Credentials.from_service_account_file(creds_path, scopes=scopes)
+        creds.refresh(Request())
+        access_token = creds.token
+        project_id = creds.project_id
 
-                print("🕵️ MANUAL TOKEN FETCH START...")
-                creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-                print(f"📂 PATH: {creds_path}")
-                
-                scoped_creds = service_account.Credentials.from_service_account_file(
-                    creds_path,
-                    scopes=["https://www.googleapis.com/auth/firebase.messaging"]
-                )
-                
-                scoped_creds.refresh(Request())
-                print(f"✅ MANUAL TOKEN FETCH SUCCESS! Token ends with: ...{scoped_creds.token[-10:]}")
-            except Exception as e:
-                print(f"❌ MANUAL TOKEN FETCH FAILED: {e}")
+        # 3. Construct Raw Payload (FCM V1)
+        endpoint = f"https://fcm.googleapis.com/v1/projects/{project_id}/messages:send"
+        
+        payload = {
+            "message": {
+                "token": target_token,
+                "notification": {
+                    "title": title,
+                    "body": body
+                },
+                "data": {
+                    **(data or {}),
+                    "click_action": "FLUTTER_NOTIFICATION_CLICK"
+                },
+                "apns": {
+                    "headers": {
+                        "apns-priority": "10",
+                        "apns-topic": "com.bahribirer.rosap"
+                    },
+                    "payload": {
+                        "aps": {
+                            "alert": {
+                                "title": title,
+                                "body": body
+                            },
+                            "sound": "default",
+                            "badge": 1,
+                            "content-available": 1,
+                            "mutable-content": 1
+                        }
+                    }
+                }
+            }
+        }
 
-            response = messaging.send(message, app=app)
-            print(f"🔥 FCM SUCCESS: {response}")
-            return response
-        except messaging.UnregisteredError:
-             # Token artık geçerli değil, temizle
-            print(f"🧹 Removing unregistered token for user {user_id}: {target_token}")
+        # 4. Send Request
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post(endpoint, headers=headers, data=json.dumps(payload))
+        
+        if response.status_code == 200:
+            print(f"🔥 RAW FCM SUCCESS: {response.json()}")
+            return response.json()
+        elif response.status_code == 404 or "UNREGISTERED" in response.text:
+            print(f"🧹 Removing unregistered token: {target_token}")
             await db.users.update_one(
                 {"_id": user_id},
                 {"$pull": {"device_tokens": target_token}}
             )
-        except Exception as e:
-            print(f"❌ FCM SEND ERROR: {type(e).__name__}: {str(e)}")
-            # Eğer hata 'authentication' ise belirt
-            if "authentication" in str(e).lower():
-                print("🚨 AUTHENTICATION PROBLEM: Check service account or scopes.")
-            
+        else:
+            print(f"❌ RAW FCM ERROR ({response.status_code}): {response.text}")
+
     except Exception as e:
-        print(f"❌ GENERAL PUSH ERROR: {str(e)}")
+        print(f"❌ GENERAL RAW PUSH ERROR: {str(e)}")
 
 async def create_notification(user_id: ObjectId, title: str, body: str, type: str = "info"):
     """
