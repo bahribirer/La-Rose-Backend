@@ -44,6 +44,7 @@ async def load_products_public() -> List[Dict]:
             "price_eur": p.get("price_eur"),
             "price_51": p.get("price_51"),
             "cost": p.get("cost"),
+            "profit": p.get("profit"),
             "margin": p.get("margin"),
             "markup": p.get("markup"),
             "gtin": p.get("gtin") or p["id"]

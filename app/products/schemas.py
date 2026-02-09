@@ -27,6 +27,7 @@ class BulkUpdateItem(BaseModel):
     price_eur: Optional[float] = None
     price_51: Optional[float] = None
     cost: Optional[float] = None
+    profit: Optional[float] = None
     category: Optional[str] = None
     volume: Optional[str] = None
     name: Optional[str] = None
