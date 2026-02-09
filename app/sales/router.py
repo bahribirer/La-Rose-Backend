@@ -419,6 +419,7 @@ async def export_user_reports(
         "kar": ("Kâr", lambda r, i, p: p.get("profit") or 0),
         "markup": ("Markup", lambda r, i, p: p.get("markup") or 0),
         "karlilik": ("Karlılık", lambda r, i, p: f"%{p.get('margin') or 0}"),
+        "category": ("Kategori", lambda r, i, p: p.get("category") or "Diğer"),
     }
 
     # Determine columns to export
@@ -427,7 +428,7 @@ async def export_user_reports(
     else:
         # Default 13 columns as requested
         selected_keys = [
-            "date", "barcode", "product_name", "unit_price", "quantity", 
+            "date", "barcode", "product_name", "category", "unit_price", "quantity", 
             "total_gross", "discount", "net_sales", "esf", "maliyet", 
             "kar", "markup", "karlilik"
         ]
