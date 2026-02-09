@@ -35,9 +35,17 @@ async def load_products_public() -> List[Dict]:
         res.append({
             "id": p["id"],
             "name": best_name,
-            "tr_name": best_name, # Explicitly provide for mobile app
+            "tr_name": best_name, 
             "volume": p.get("volume"),
             "category": p.get("category"),
+            "psf_price": p.get("psf_price"),
+            "esf_price": p.get("esf_price"),
+            "wsf_price": p.get("wsf_price"),
+            "price_eur": p.get("price_eur"),
+            "price_51": p.get("price_51"),
+            "cost": p.get("cost"),
+            "margin": p.get("margin"),
+            "markup": p.get("markup"),
             "gtin": p.get("gtin") or p["id"]
         })
     return res
