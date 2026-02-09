@@ -406,37 +406,30 @@ async def export_user_reports(
     # COLUMN MAPPING
     # Key -> (Header Name, Data Extractor Function)
     column_map = {
-        "cat": ("KATEGORİ", lambda r, i, p: p.get("category") or "-"),
-        "gtin": ("GTIN", lambda r, i, p: p.get("gtin") or i.get("barcode") or i.get("productId") or "-"),
-        "product_name": ("PRODUCT", lambda r, i, p: p.get("tr_name") or p.get("name") or i.get("productName", "Bilinmeyen")),
-        "ml": ("ML", lambda r, i, p: p.get("volume") or "-"),
-        "psf_2026": ("2026 PSF", lambda r, i, p: p.get("psf_price") or 0),
-        "esf": ("ESF", lambda r, i, p: p.get("esf_price") or 0),
-        "wsf": ("WSF", lambda r, i, p: p.get("wsf_price") or 0),
-        "price_eur": ("PRICE", lambda r, i, p: p.get("price_eur") or 0),
-        "price_51": ("51", lambda r, i, p: p.get("price_51") or 0),
-        "cost_tax": ("Maliyet", lambda r, i, p: p.get("cost") or i.get("cost") or 0),
-        "profit": ("Kär", lambda r, i, p: i.get("profit") or i.get("ecz_kar") or 0),
-        "markup": ("Markup", lambda r, i, p: p.get("markup") or 0),
-        "margin": ("Kärlılık", lambda r, i, p: p.get("margin") or 0),
         "date": ("Tarih", lambda r, i, p: i.get("date") or r.get("createdAt").strftime("%d.%m.%Y")),
-        "user_name": ("Kullanıcı", lambda r, i, p: user_map.get(r.get("user_id"), "-")),
-        "quantity": ("Adet", lambda r, i, p: i.get("quantity", 0)),
+        "barcode": ("Barkod Numarası", lambda r, i, p: i.get("barcode") or i.get("productId") or "-"),
+        "product_name": ("Ürün Adı", lambda r, i, p: p.get("tr_name") or p.get("name") or i.get("productName", "Bilinmeyen")),
         "unit_price": ("Birim Fiyat", lambda r, i, p: i.get("unitPrice") or i.get("birim_fiyat") or 0),
-        "total_price": ("Net Satış", lambda r, i, p: i.get("totalPrice") or i.get("tutar") or 0),
-        "barcode": ("Barkod", lambda r, i, p: i.get("barcode") or i.get("productId") or "-"),
-        "stock": ("Stok", lambda r, i, p: i.get("stock", 0)),
-        "report_name": ("Rapor Adı", lambda r, i, p: r.get("name", "-")),
+        "quantity": ("Satış Adet", lambda r, i, p: i.get("quantity", 0)),
+        "total_gross": ("Toplam Tutar", lambda r, i, p: (i.get("unitPrice") or i.get("birim_fiyat") or 0) * i.get("quantity", 0)),
+        "discount": ("İskonto", lambda r, i, p: i.get("discount_vat") or 0),
+        "net_sales": ("Net Satış", lambda r, i, p: i.get("totalPrice") or i.get("tutar") or 0),
+        "esf": ("ESF", lambda r, i, p: p.get("esf_price") or 0),
+        "maliyet": ("Maliyet", lambda r, i, p: p.get("cost") or 0),
+        "kar": ("Kâr", lambda r, i, p: p.get("profit") or 0),
+        "markup": ("Markup", lambda r, i, p: p.get("markup") or 0),
+        "karlilik": ("Karlılık", lambda r, i, p: f"%{p.get('margin') or 0}"),
     }
 
     # Determine columns to export
     if columns:
         selected_keys = [k.strip() for k in columns.split(",") if k.strip() in column_map]
     else:
-        # Default as per the photo
+        # Default 13 columns as requested
         selected_keys = [
-            "cat", "gtin", "product_name", "ml", "psf_2026", "esf", "wsf", 
-            "price_eur", "price_51", "cost_tax", "profit", "markup", "margin"
+            "date", "barcode", "product_name", "unit_price", "quantity", 
+            "total_gross", "discount", "net_sales", "esf", "maliyet", 
+            "kar", "markup", "karlilik"
         ]
         
     # Write Headers
