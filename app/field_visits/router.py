@@ -41,6 +41,9 @@ async def create_field_visit(
         "visit_time": visit_time,
         "visit_datetime": visit_datetime,
         "notes": notes,
+        "confirmed": False,
+        "confirmed_at": None,
+        "evaluation": None,
         "created_at": datetime.utcnow(),
     }
 
@@ -73,15 +76,7 @@ async def get_field_visits(
 
     visits = []
     async for doc in cursor:
-        visits.append({
-            "id": str(doc["_id"]),
-            "pharmacy_id": str(doc["pharmacy_id"]),
-            "pharmacy_name": doc["pharmacy_name"],
-            "pharmacy_district": doc.get("pharmacy_district"),
-            "visit_date": doc["visit_date"],
-            "visit_time": doc["visit_time"],
-            "notes": doc.get("notes", ""),
-        })
+        visits.append(_serialize_visit(doc))
 
     return visits
 
@@ -99,17 +94,75 @@ async def get_visits_by_date(
 
     visits = []
     async for doc in cursor:
-        visits.append({
-            "id": str(doc["_id"]),
-            "pharmacy_id": str(doc["pharmacy_id"]),
-            "pharmacy_name": doc["pharmacy_name"],
-            "pharmacy_district": doc.get("pharmacy_district"),
-            "visit_date": doc["visit_date"],
-            "visit_time": doc["visit_time"],
-            "notes": doc.get("notes", ""),
-        })
+        visits.append(_serialize_visit(doc))
 
     return visits
+
+
+@router.put("/{visit_id}/confirm")
+async def confirm_field_visit(
+    visit_id: str,
+    current_user=Depends(get_current_db_user),
+):
+    """Mark a field visit as confirmed (gidildi)."""
+    if not ObjectId.is_valid(visit_id):
+        raise HTTPException(400, "Invalid visit ID")
+
+    result = await db.field_visits.update_one(
+        {"_id": ObjectId(visit_id), "user_id": current_user["_id"]},
+        {"$set": {
+            "confirmed": True,
+            "confirmed_at": datetime.utcnow(),
+        }},
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(404, "Visit not found")
+
+    return {"status": "confirmed"}
+
+
+@router.put("/{visit_id}/evaluate")
+async def evaluate_field_visit(
+    visit_id: str,
+    duration_hours: float = Query(..., description="Kaç saat kalındı"),
+    transport_type: str = Query(..., description="taksi / kendi_araci / toplu_tasima / yuruyus"),
+    taxi_cost: float = Query(0, description="Taksi ücreti (TL)"),
+    pharmacist_rating: int = Query(..., ge=1, le=5, description="Eczacı tutumu 1-5"),
+    evaluation_notes: str = Query("", description="Ek notlar"),
+    current_user=Depends(get_current_db_user),
+):
+    """Evaluate a confirmed field visit."""
+    if not ObjectId.is_valid(visit_id):
+        raise HTTPException(400, "Invalid visit ID")
+
+    # Verify visit exists, is confirmed, and belongs to user
+    visit = await db.field_visits.find_one({
+        "_id": ObjectId(visit_id),
+        "user_id": current_user["_id"],
+    })
+
+    if not visit:
+        raise HTTPException(404, "Visit not found")
+
+    if not visit.get("confirmed"):
+        raise HTTPException(400, "Visit must be confirmed first")
+
+    evaluation = {
+        "duration_hours": duration_hours,
+        "transport_type": transport_type,
+        "taxi_cost": taxi_cost if transport_type == "taksi" else 0,
+        "pharmacist_rating": pharmacist_rating,
+        "evaluation_notes": evaluation_notes,
+        "evaluated_at": datetime.utcnow(),
+    }
+
+    await db.field_visits.update_one(
+        {"_id": ObjectId(visit_id)},
+        {"$set": {"evaluation": evaluation}},
+    )
+
+    return {"status": "evaluated"}
 
 
 @router.delete("/{visit_id}")
@@ -130,3 +183,32 @@ async def delete_field_visit(
         raise HTTPException(404, "Visit not found")
 
     return {"status": "deleted"}
+
+
+def _serialize_visit(doc):
+    """Serialize a visit document for API response."""
+    result = {
+        "id": str(doc["_id"]),
+        "pharmacy_id": str(doc["pharmacy_id"]),
+        "pharmacy_name": doc["pharmacy_name"],
+        "pharmacy_district": doc.get("pharmacy_district"),
+        "visit_date": doc["visit_date"],
+        "visit_time": doc["visit_time"],
+        "notes": doc.get("notes", ""),
+        "confirmed": doc.get("confirmed", False),
+        "confirmed_at": doc.get("confirmed_at"),
+    }
+
+    evaluation = doc.get("evaluation")
+    if evaluation:
+        result["evaluation"] = {
+            "duration_hours": evaluation["duration_hours"],
+            "transport_type": evaluation["transport_type"],
+            "taxi_cost": evaluation.get("taxi_cost", 0),
+            "pharmacist_rating": evaluation["pharmacist_rating"],
+            "evaluation_notes": evaluation.get("evaluation_notes", ""),
+        }
+    else:
+        result["evaluation"] = None
+
+    return result
