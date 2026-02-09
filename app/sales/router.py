@@ -424,7 +424,7 @@ async def export_excel_report(
     ws.title = "Satis Detaylari"
     
     column_map = {
-        "user_name": ("Kullanıcı Adı", lambda r, i, p: user_map.get(r.get("user_id"), "Bilinmeyen")),
+        "user_name": ("Kullanıcı Adı", lambda r, i, p: user_map.get(r.get("user_id"), "Bilinmeyen") if isinstance(r.get("user_id"), (str, ObjectId)) else "Bilinmeyen"),
         "date": ("Tarih", lambda r, i, p: i.get("date") or r.get("createdAt").strftime("%d.%m.%Y")),
         "barcode": ("Barkod Numarası", lambda r, i, p: i.get("barcode") or i.get("productId") or "-"),
         "product_name": ("Ürün Adı", lambda r, i, p: p.get("tr_name") or p.get("name") or i.get("productName", "Bilinmeyen")),
