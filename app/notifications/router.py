@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from bson import ObjectId
-from typing import List
+from typing import List, Optional
 from app.core.dependencies import get_current_firebase_user
+from pydantic import BaseModel
 from app.core.database import db
 from app.users.router import get_current_db_user
 from app.admin.dependencies import admin_required
@@ -94,3 +95,44 @@ async def delete_admin_notification(
         raise HTTPException(404, "Notification not found")
         
     return {"status": "success"}
+
+class SendNotificationRequest(BaseModel):
+    user_id: Optional[str] = None
+    title: str
+    body: str
+
+@router.post("/admin/send")
+async def send_admin_notification(
+    payload: SendNotificationRequest,
+    user=Depends(admin_required)
+):
+    from app.notifications.service import create_notification
+    
+    # If user_id provided, send to that user
+    if payload.user_id:
+        if not ObjectId.is_valid(payload.user_id):
+            raise HTTPException(400, "Invalid User ID")
+        
+        await create_notification(
+            user_id=ObjectId(payload.user_id),
+            title=payload.title,
+            body=payload.body,
+            type="admin_message"
+        )
+        return {"status": "sent", "target": "single"}
+    
+    # If no user_id, send to ALL users (Broadcast) - dangerous but powerful
+    # For now, let's just find all users with tokens
+    users = await db.users.find({"device_tokens": {"$exists": True, "$ne": []}}).to_list(None)
+    
+    count = 0
+    for u in users:
+        await create_notification(
+            user_id=u["_id"],
+            title=payload.title,
+            body=payload.body,
+            type="admin_broadcast"
+        )
+        count += 1
+        
+    return {"status": "sent", "target": "broadcast", "count": count}
