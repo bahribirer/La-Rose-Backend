@@ -37,6 +37,35 @@ async def list_products(
         "items": items
     }
 
+@router.post("/admin/bulk-update", dependencies=[Depends(admin_required)])
+async def bulk_update_products(payload: list):
+    """
+    Accepts a list of {id: string, ...updates} objects
+    """
+    from pymongo import UpdateOne
+    
+    operations = []
+    for item in payload:
+        p_id = item.get("id")
+        if not p_id: continue
+        
+        # Remove id from $set payload
+        updates = {k: v for k, v in item.items() if k != "id"}
+        if not updates: continue
+        
+        operations.append(
+            UpdateOne({"id": p_id}, {"$set": updates})
+        )
+    
+    if operations:
+        await db.products.bulk_write(operations)
+        
+    # Invalidate cache
+    from app.products.service import load_products
+    await load_products(force_reload=True)
+    
+    return {"message": f"{len(operations)} ürün güncellendi"}
+
 @router.patch("/admin/{product_id}", dependencies=[Depends(admin_required)])
 async def update_product_metadata(product_id: str, payload: dict):
     # Validations or other logic can go here if needed
