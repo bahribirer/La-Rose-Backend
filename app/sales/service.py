@@ -154,6 +154,7 @@ async def save_scan_report(
     # mevcut
     "profit": i["ecz_kar"],
     "cost": i["maliyet"],
+    "discount": i.get("discount_vat") or 0.0,
     "confidence": i["match_confidence"],
     "date": i.get("date"),
 })

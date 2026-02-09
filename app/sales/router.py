@@ -412,7 +412,7 @@ async def export_user_reports(
         "unit_price": ("Birim Fiyat", lambda r, i, p: i.get("unitPrice") or i.get("birim_fiyat") or 0),
         "quantity": ("Satış Adet", lambda r, i, p: i.get("quantity", 0)),
         "total_gross": ("Toplam Tutar", lambda r, i, p: (i.get("unitPrice") or i.get("birim_fiyat") or 0) * i.get("quantity", 0)),
-        "discount": ("İskonto", lambda r, i, p: i.get("discount_vat") or 0),
+        "discount": ("İskonto", lambda r, i, p: i.get("discount") or i.get("discount_vat") or 0),
         "net_sales": ("Net Satış", lambda r, i, p: i.get("totalPrice") or i.get("tutar") or 0),
         "esf": ("ESF", lambda r, i, p: p.get("esf_price") or 0),
         "maliyet": ("Maliyet", lambda r, i, p: p.get("cost") or 0),

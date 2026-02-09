@@ -61,6 +61,12 @@ class SaleItemFromScan(BaseModel):
         alias="stock"
     )
 
+    discount: Optional[float] = Field(
+        default=0.0,
+        description="İskonto tutarı",
+        alias="discount_vat"
+    )
+
     date: Optional[str] = Field(
         default=None,
         description="Satış tarihi (Excel'den)"
