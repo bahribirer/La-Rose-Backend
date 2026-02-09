@@ -19,6 +19,9 @@ async def delete_account(user: dict):
         # 🔔 NOTIFICATIONS
         await db.notifications.delete_many({"user_id": user_id})
 
+        # 📅 FIELD VISITS
+        await db.field_visits.delete_many({"user_id": user_id})
+
         # ⚙️ USER SETTINGS (SAFE)
         if "user_settings" in await db.list_collection_names():
             await db.user_settings.delete_one({"user_id": user_id})
