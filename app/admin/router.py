@@ -1074,8 +1074,252 @@ async def admin_competition_participants(competition_id: str):
     }
 
 
+# ================= FIELD VISITS (ADMIN) =================
+
+@router.get("/field-visits/users", dependencies=[Depends(admin_required)])
+async def admin_field_visit_users():
+    """List all users who have field visits, with summary stats."""
+    pipeline = [
+        # Group by user_id
+        {
+            "$group": {
+                "_id": "$user_id",
+                "total_visits": {"$sum": 1},
+                "confirmed_count": {
+                    "$sum": {"$cond": [{"$eq": ["$confirmed", True]}, 1, 0]}
+                },
+                "evaluated_count": {
+                    "$sum": {"$cond": [{"$ne": ["$evaluation", None]}, 1, 0]}
+                },
+                "last_visit_date": {"$max": "$visit_date"},
+            }
+        },
+        # Join user
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "_id",
+                "foreignField": "_id",
+                "as": "user",
+            }
+        },
+        {"$unwind": {"path": "$user", "preserveNullAndEmptyArrays": True}},
+        # Join profile
+        {
+            "$lookup": {
+                "from": "user_profiles",
+                "localField": "_id",
+                "foreignField": "user_id",
+                "as": "profile",
+            }
+        },
+        {"$unwind": {"path": "$profile", "preserveNullAndEmptyArrays": True}},
+        # Sort by last visit
+        {"$sort": {"last_visit_date": -1}},
+    ]
+
+    cursor = db.field_visits.aggregate(pipeline)
+    result = []
+    async for doc in cursor:
+        user = doc.get("user", {})
+        profile = doc.get("profile", {})
+
+        # Normalize representative
+        rep = profile.get("representative")
+        if isinstance(rep, dict):
+            rep = rep.get("name", "")
+
+        result.append({
+            "user_id": str(doc["_id"]),
+            "full_name": user.get("full_name", "Bilinmeyen"),
+            "email": user.get("email", ""),
+            "pharmacy_name": profile.get("pharmacy_name", "-"),
+            "district": profile.get("district", "-"),
+            "region": profile.get("region", "-"),
+            "representative": rep or "-",
+            "total_visits": doc.get("total_visits", 0),
+            "confirmed_count": doc.get("confirmed_count", 0),
+            "evaluated_count": doc.get("evaluated_count", 0),
+            "last_visit_date": doc.get("last_visit_date"),
+        })
+
+    return result
 
 
+@router.get("/field-visits/user/{user_id}", dependencies=[Depends(admin_required)])
+async def admin_field_visit_detail(user_id: str):
+    """Get all field visits for a specific user."""
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(400, "Invalid user ID")
+
+    oid = ObjectId(user_id)
+
+    # Get user info
+    user = await db.users.find_one({"_id": oid})
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    profile = await db.user_profiles.find_one({"user_id": oid})
+
+    # Normalize representative
+    rep = (profile or {}).get("representative")
+    if isinstance(rep, dict):
+        rep = rep.get("name", "")
+
+    # Get visits
+    cursor = db.field_visits.find({"user_id": oid}).sort("visit_date", -1)
+
+    visits = []
+    async for doc in cursor:
+        evaluation = doc.get("evaluation")
+        visits.append({
+            "id": str(doc["_id"]),
+            "visit_date": doc.get("visit_date"),
+            "visit_time": doc.get("visit_time"),
+            "pharmacy_name": doc.get("pharmacy_name", "-"),
+            "pharmacy_district": doc.get("pharmacy_district", "-"),
+            "notes": doc.get("notes", ""),
+            "confirmed": doc.get("confirmed", False),
+            "confirmed_at": doc.get("confirmed_at"),
+            "evaluation": {
+                "duration_hours": evaluation["duration_hours"],
+                "transport_type": evaluation["transport_type"],
+                "taxi_cost": evaluation.get("taxi_cost", 0),
+                "pharmacist_rating": evaluation["pharmacist_rating"],
+                "evaluation_notes": evaluation.get("evaluation_notes", ""),
+            } if evaluation else None,
+        })
+
+    return {
+        "user": {
+            "id": str(user["_id"]),
+            "full_name": user.get("full_name", "Bilinmeyen"),
+            "email": user.get("email", ""),
+            "pharmacy_name": (profile or {}).get("pharmacy_name", "-"),
+            "district": (profile or {}).get("district", "-"),
+            "region": (profile or {}).get("region", "-"),
+            "representative": rep or "-",
+        },
+        "visits": visits,
+    }
+
+
+@router.get("/field-visits/export", dependencies=[Depends(admin_required)])
+async def admin_field_visits_export(
+    user_id: str = Query(None, description="Filter by user ID"),
+):
+    """Export field visits as Excel file."""
+    import openpyxl
+    import io
+    from fastapi.responses import StreamingResponse
+
+    query = {}
+    filename_suffix = "Tum_Kullanicilar"
+
+    if user_id and ObjectId.is_valid(user_id):
+        query["user_id"] = ObjectId(user_id)
+        user = await db.users.find_one({"_id": ObjectId(user_id)})
+        if user:
+            safe_name = (user.get("full_name") or "kullanici").replace(" ", "_")
+            filename_suffix = safe_name
+
+    # Fetch visits
+    cursor = db.field_visits.find(query).sort("visit_date", -1)
+    visits = await cursor.to_list(None)
+
+    # Build user map for names
+    user_ids = list(set(v["user_id"] for v in visits))
+    user_map = {}
+    pharmacy_map = {}
+
+    if user_ids:
+        users = await db.users.find({"_id": {"$in": user_ids}}).to_list(None)
+        for u in users:
+            user_map[u["_id"]] = u.get("full_name", "Bilinmeyen")
+
+        profiles = await db.user_profiles.find({"user_id": {"$in": user_ids}}).to_list(None)
+        for p in profiles:
+            pharmacy_map[p["user_id"]] = p.get("pharmacy_name", "-")
+
+    # Create workbook
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Saha Ziyaretleri"
+
+    # Headers
+    headers = [
+        "Kullanıcı", "Eczane", "İlçe", "Tarih", "Saat",
+        "Durum", "Süre (Saat)", "Ulaşım", "Taksi Ücreti (₺)",
+        "Eczacı Puanı", "Ziyaret Notları", "Değerlendirme Notları",
+    ]
+    ws.append(headers)
+
+    # Style header row
+    from openpyxl.styles import Font, PatternFill
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+
+    transport_labels = {
+        "taksi": "Taksi",
+        "kendi_araci": "Kendi Aracı",
+        "toplu_tasima": "Toplu Taşıma",
+        "yuruyus": "Yürüyüş",
+    }
+
+    for v in visits:
+        uid = v.get("user_id")
+        evaluation = v.get("evaluation")
+
+        if v.get("evaluation"):
+            status = "Değerlendirildi"
+        elif v.get("confirmed"):
+            status = "Gidildi"
+        else:
+            status = "Planlandı"
+
+        row = [
+            user_map.get(uid, "Bilinmeyen"),
+            v.get("pharmacy_name", "-"),
+            v.get("pharmacy_district", "-"),
+            v.get("visit_date", "-"),
+            v.get("visit_time", "-"),
+            status,
+            evaluation["duration_hours"] if evaluation else "",
+            transport_labels.get(evaluation["transport_type"], evaluation["transport_type"]) if evaluation else "",
+            evaluation.get("taxi_cost", 0) if evaluation and evaluation.get("transport_type") == "taksi" else "",
+            evaluation["pharmacist_rating"] if evaluation else "",
+            v.get("notes", ""),
+            evaluation.get("evaluation_notes", "") if evaluation else "",
+        ]
+        ws.append(row)
+
+    # Auto-width columns
+    for col in ws.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                if cell.value:
+                    max_len = max(max_len, len(str(cell.value)))
+            except:
+                pass
+        ws.column_dimensions[col_letter].width = min(max_len + 4, 40)
+
+    # Save
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"Saha_Ziyareti_{filename_suffix}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 
