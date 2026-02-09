@@ -69,6 +69,7 @@ async def save_scan_report(
     # mevcut
     "maliyet": maliyet,
     "ecz_kar": ecz_kar,
+    "discount_vat": item.discount,
     "match_confidence": item.match_confidence,
     "date": item.date,
 })
