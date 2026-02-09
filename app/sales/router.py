@@ -355,6 +355,11 @@ async def export_excel_report(
     # We'll do this AFTER fetching reports, or just fetch all users involved?
     # Better: Fetch reports first, then extract user_ids, then fetch users.
     
+    # Sanitize filename (ASCII only)
+    import unicodedata
+    normalized = unicodedata.normalize('NFKD', display_name).encode('ascii', 'ignore').decode('ascii')
+    safe_name = "".join([c if c.isalnum() else "_" for c in normalized])
+
     query = {}
     if object_ids:
         query["user_id"] = {"$in": object_ids}
