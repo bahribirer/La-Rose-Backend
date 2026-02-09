@@ -157,6 +157,7 @@ async def list_users():
         # 🔹 PROJECT (⚠️ SADECE FIELD: 1)
         {
             "$project": {
+                "id": { "$toString": "$_id" },
                 "email": 1,
                 "full_name": 1,
                 "avatar": 1,
