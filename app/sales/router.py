@@ -412,8 +412,8 @@ async def export_user_reports(
         "unit_price": ("Birim Fiyat", lambda r, i, p: i.get("unitPrice") or i.get("birim_fiyat") or 0),
         "quantity": ("Satış Adet", lambda r, i, p: i.get("quantity", 0)),
         "total_gross": ("Toplam Tutar", lambda r, i, p: (i.get("unitPrice") or i.get("birim_fiyat") or 0) * i.get("quantity", 0)),
-        "discount": ("İskonto", lambda r, i, p: i.get("discount") or i.get("discount_vat") or 0),
-        "net_sales": ("Net Satış", lambda r, i, p: i.get("totalPrice") or i.get("tutar") or 0),
+        "discount": ("İskonto", lambda r, i, p: i.get("discount", i.get("discount_vat", 0))),
+        "net_sales": ("Net Satış", lambda r, i, p: i.get("totalPrice", i.get("tutar", 0))),
         "esf": ("ESF", lambda r, i, p: p.get("esf_price") or 0),
         "maliyet": ("Maliyet", lambda r, i, p: p.get("cost") or 0),
         "kar": ("Kâr", lambda r, i, p: p.get("profit") or 0),
@@ -446,6 +446,10 @@ async def export_user_reports(
             # Try to find metadata by barcode (productId)
             barcode = item.get("productId")
             prod_meta = prod_meta_map.get(barcode, {})
+            
+            # 🔥 DEBUG
+            print(f"📄 ITEM TYPE: {type(item)} KEYS: {list(item.keys() if isinstance(item, dict) else [])}")
+            print(f"📄 EXPORT ITEM: {item.get('productName')} | Disc: {item.get('discount')} | Net: {item.get('totalPrice')}")
             
             row = [column_map[k][1](r, item, prod_meta) for k in selected_keys]
             ws.append(row)
