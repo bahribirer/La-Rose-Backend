@@ -398,8 +398,10 @@ async def export_excel_report(
     if not reports:
         raise HTTPException(404, "Rapor bulunamadı")
 
-    # Fetch user names for mapping
+    # Fetch user names and pharmacy names for mapping
     user_map = {}
+    pharmacy_map = {}
+    
     if report_user_ids:
         # Convert all to ObjectId if possible for query
         search_ids = []
@@ -411,13 +413,21 @@ async def export_excel_report(
         
         if search_ids:
             try:
+                # 1. Fetch Users
                 user_cursor = db.users.find({"_id": {"$in": search_ids}})
                 async for u in user_cursor:
                     user_map[u["_id"]] = u.get("full_name") or u.get("email") or "Kullanici"
-                    # Also map string version just in case
                     user_map[str(u["_id"])] = user_map[u["_id"]]
+                
+                # 2. Fetch Profiles for Pharmacy Name
+                # user_profiles has user_id field
+                profile_cursor = db.user_profiles.find({"user_id": {"$in": search_ids}})
+                async for p in profile_cursor:
+                    pharmacy_map[p["user_id"]] = p.get("pharmacy_name")
+                    pharmacy_map[str(p["user_id"])] = p.get("pharmacy_name")
+                    
             except Exception as e:
-                print(f"❌ User fetch error: {e}")
+                print(f"❌ User/Profile fetch error: {e}")
 
     # GENERATE EXCEL
     import openpyxl
@@ -430,6 +440,7 @@ async def export_excel_report(
     
     column_map = {
         "user_name": ("Kullanıcı Adı", lambda r, i, p: user_map.get(r.get("user_id"), "Bilinmeyen") if isinstance(r.get("user_id"), (str, ObjectId)) else "Bilinmeyen"),
+        "pharmacy_name": ("Eczane Adı", lambda r, i, p: pharmacy_map.get(r.get("user_id"), "-") if isinstance(r.get("user_id"), (str, ObjectId)) else "-"),
         "date": ("Tarih", lambda r, i, p: i.get("date") or r.get("createdAt").strftime("%d.%m.%Y")),
         "barcode": ("Barkod Numarası", lambda r, i, p: i.get("barcode") or i.get("productId") or "-"),
         "product_name": ("Ürün Adı", lambda r, i, p: p.get("tr_name") or p.get("name") or i.get("productName", "Bilinmeyen")),
@@ -451,9 +462,9 @@ async def export_excel_report(
     if columns:
         selected_keys = [k.strip() for k in columns.split(",") if k.strip() in column_map]
     else:
-        # Default columns (15 cols now)
+        # Default columns (16 cols now)
         selected_keys = [
-            "user_name", "date", "barcode", "product_name", "category", "unit_price", "quantity", 
+            "user_name", "pharmacy_name", "date", "barcode", "product_name", "category", "unit_price", "quantity", 
             "total_gross", "discount", "net_sales", "esf", "maliyet", 
             "kar", "markup", "karlilik", "report_type"
         ]
