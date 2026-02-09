@@ -11,9 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.competitions.router import router as competitions_router
 from app.pharmacies.router import router as pharmacies_router
 from app.notifications.router import router as notifications_router
-
-
-
+from app.field_visits.router import router as field_visits_router
 
 
 
@@ -44,3 +42,4 @@ app.include_router(admin_router)
 app.include_router(competitions_router)
 app.include_router(pharmacies_router)
 app.include_router(notifications_router)
+app.include_router(field_visits_router)
