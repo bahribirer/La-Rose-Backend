@@ -100,7 +100,8 @@ def strategy_standard(raw_text):
       * Satırdaki 3. Para -> `fiyat`
     
     - **Küçük Tamsayılar (1, 2, 5):** Bunlar genelde "Miktar" veya "Adet" başlığının altına gelir. Yerini ona göre bul.
-    - **Barkod:** 13 haneli sayıyı her zaman `barkod` anahtarına at.
+    - **Barkod:** SADECE 13 haneli ve '3' ile başlayan sayıları barkod olarak kabul et. 4-5 haneli veya '3' ile başlamayan sayılar barkod DEĞİLDİR, o satırı tamamen ATLA.
+    - Eğer bir satırda geçerli 13 haneli barkod yoksa, o satırı `urunler` listesine EKLEMEYİN.
 
     ÇIKTI FORMATI (JSON):
     {
@@ -127,7 +128,7 @@ def strategy_scattered(raw_text):
 
     ADIM 1: MEVCUT VERİ TİPLERİNİ HAVUZLA (POOLING)
     Metni tara ve şu listeleri oluştur:
-    - [ZORUNLU] **Barkodlar:** (13 haneli sayılar). En güvenilir hizalama aracıdır.
+    - [ZORUNLU] **Barkodlar:** SADECE 13 haneli ve '3' ile başlayan sayılar. 4-5 haneli veya '3' ile başlamayan sayılar barkod DEĞİLDİR, o satırı tamamen ATLA.
     - [ZORUNLU] **Ürün İsimleri:** (Büyük harfli metin blokları).
     - [ZORUNLU] **Paralar:** (Virgüllü sayılar).
     

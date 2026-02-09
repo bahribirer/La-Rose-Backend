@@ -64,8 +64,13 @@ class ProductTotalStrategy(ReportStrategy):
                         # Normalize keys to lowercase
                         p_norm = {k.lower(): v for k, v in p.items()}
                         
-                        barcode = p_norm.get("barkod")
-                        if not barcode: continue # Mandatory
+                        barcode = str(p_norm.get("barkod") or "").strip()
+                        # 🛑 STRICT: Only accept 13-digit EAN-13 barcodes starting with '3'
+                        barcode_digits = "".join(c for c in barcode if c.isdigit())
+                        if len(barcode_digits) != 13 or not barcode_digits.startswith("3"):
+                            print(f"⚠️ GROQ: Skipping invalid barcode '{barcode}'")
+                            continue
+                        barcode = barcode_digits
                         
                         item = DocumentLineItem(raw_text=str(p), confidence=0.99)
                         item.barcode = barcode
