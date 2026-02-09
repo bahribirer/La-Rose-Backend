@@ -420,17 +420,18 @@ async def export_user_reports(
         "markup": ("Markup", lambda r, i, p: p.get("markup") or 0),
         "karlilik": ("Karlılık", lambda r, i, p: f"%{p.get('margin') or 0}"),
         "category": ("Kategori", lambda r, i, p: p.get("category") or "Diğer"),
+        "report_type": ("Rapor Tipi", lambda r, i, p: "Yarışma Raporu" if r.get("is_competition_report") else "Normal Rapor"),
     }
 
     # Determine columns to export
     if columns:
         selected_keys = [k.strip() for k in columns.split(",") if k.strip() in column_map]
     else:
-        # Default 13 columns as requested
+        # Default columns (14 cols now)
         selected_keys = [
             "date", "barcode", "product_name", "category", "unit_price", "quantity", 
             "total_gross", "discount", "net_sales", "esf", "maliyet", 
-            "kar", "markup", "karlilik"
+            "kar", "markup", "karlilik", "report_type"
         ]
         
     # Write Headers
