@@ -318,8 +318,9 @@ async def export_excel_report(
     # Parse IDs
     ids_list = [id.strip() for id in (user_ids or "").split(",") if id.strip()]
     
-    if not ids_list and not competition_id:
-        raise HTTPException(400, "User IDs or Competition ID required")
+    # Allow if competition_id OR (month and year) OR user_ids
+    if not ids_list and not competition_id and not (month and year):
+        raise HTTPException(400, "User IDs, Competition ID, or Date (Month/Year) required")
         
     for uid in ids_list:
         if not ObjectId.is_valid(uid):
@@ -349,6 +350,8 @@ async def export_excel_report(
                     display_name = agg[0]["profile"].get("pharmacy_name") or display_name
     elif competition_id:
          display_name = f"Yarisma_{competition_id}"
+    elif month and year:
+         display_name = f"Tum_Eczaneler_{month}_{year}"
 
     # Fetch unique user IDs from reports to ensure we have all names
     # (The initial object_ids might be empty if competition_id is used)
