@@ -441,9 +441,12 @@ async def export_excel_report(
     ws = wb.active
     ws.title = "Satis Detaylari"
     
+    tr_months = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+    
     column_map = {
         "user_name": ("Kullanıcı Adı", lambda r, i, p: user_map.get(r.get("user_id"), "Bilinmeyen") if isinstance(r.get("user_id"), (str, ObjectId)) else "Bilinmeyen"),
         "pharmacy_name": ("Eczane Adı", lambda r, i, p: pharmacy_map.get(r.get("user_id"), "-") if isinstance(r.get("user_id"), (str, ObjectId)) else "-"),
+        "report_month": ("Rapor Dönemi", lambda r, i, p: f"{tr_months[r.get('createdAt').month - 1]} {r.get('createdAt').year}" if r.get("createdAt") else "-"),
         "date": ("Tarih", lambda r, i, p: i.get("date") or r.get("createdAt").strftime("%d.%m.%Y")),
         "barcode": ("Barkod Numarası", lambda r, i, p: i.get("barcode") or i.get("productId") or "-"),
         "product_name": ("Ürün Adı", lambda r, i, p: p.get("tr_name") or p.get("name") or i.get("productName", "Bilinmeyen")),
