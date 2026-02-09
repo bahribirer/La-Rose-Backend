@@ -300,18 +300,23 @@ async def admin_report_detail(report_id: str):
         {"report_id": ObjectId(report_id)}
     )
 
+    # 🔍 Fetch all products once for lookup
+    all_products = await db.products.find({}).to_list(None)
+    prod_meta_map = {p["id"]: p for p in all_products}
+
     items = []
     async for i in cursor:
         p_id = i.get("productId")
-        
-        # 🔥 FIX: Product ID is the Barcode (e.g. 869...). 
-        # No need to query products collection unless we need other fields.
+        prod_meta = prod_meta_map.get(p_id, {})
         barcode = p_id if p_id else "-"
+        
+        # Prefer tr_name > updated name > historical scan name
+        display_name = prod_meta.get("tr_name") or prod_meta.get("name") or i.get("productName")
 
         items.append({
             "id": str(i["_id"]),
             "product_id": p_id,
-            "product_name": i.get("productName"),
+            "product_name": display_name,
             "quantity": int(i.get("quantity") or 0),
             "unit_price": float(i.get("unitPrice") or i.get("unit_price") or 0),
             "total_price": float(i.get("totalPrice") or i.get("total_price") or 0),

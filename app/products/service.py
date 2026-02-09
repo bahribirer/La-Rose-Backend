@@ -27,14 +27,20 @@ async def load_products_public() -> List[Dict]:
     products = await load_products()
 
     # 🔒 client-safe projection
-    return [
-        {
+    res = []
+    for p in products:
+        # Prefer tr_name if available, else name
+        best_name = p.get("tr_name") or p.get("name") or "Bilinmeyen Ürün"
+        
+        res.append({
             "id": p["id"],
-            "name": p["name"],
-            "volume": p.get("volume")
-        }
-        for p in products
-    ]
+            "name": best_name,
+            "tr_name": best_name, # Explicitly provide for mobile app
+            "volume": p.get("volume"),
+            "category": p.get("category"),
+            "gtin": p.get("gtin") or p["id"]
+        })
+    return res
 
 
     return {

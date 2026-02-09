@@ -102,7 +102,7 @@ async def scan_report_bytes(binary: bytes) -> dict:
         "items": [
             {
                 "urun_id": i.urun_id,
-                "urun_name": i.urun_name,
+                "urun_name": product_map.get(i.urun_id, {}).get("tr_name") or i.urun_name,
                 "miktar": i.miktar,
                 "match_confidence": i.match_confidence,
 

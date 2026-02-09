@@ -408,7 +408,7 @@ async def export_user_reports(
     column_map = {
         "cat": ("KATEGORİ", lambda r, i, p: p.get("category") or "-"),
         "gtin": ("GTIN", lambda r, i, p: p.get("gtin") or i.get("barcode") or i.get("productId") or "-"),
-        "product_name": ("PRODUCT", lambda r, i, p: i.get("productName", "Bilinmeyen")),
+        "product_name": ("PRODUCT", lambda r, i, p: p.get("tr_name") or p.get("name") or i.get("productName", "Bilinmeyen")),
         "ml": ("ML", lambda r, i, p: p.get("volume") or "-"),
         "psf_2026": ("2026 PSF", lambda r, i, p: p.get("psf_price") or 0),
         "esf": ("ESF", lambda r, i, p: p.get("esf_price") or 0),
@@ -487,12 +487,20 @@ async def get_sales_report_detail(
 
     cursor = db.sales_items.find({"report_id": report["_id"]})
 
+    # 🔍 Fetch products for latest TR names
+    all_products = await db.products.find({}).to_list(None)
+    prod_meta_map = {p["id"]: p for p in all_products}
+
     items = []
     async for i in cursor:
+        p_id = i.get("productId")
+        prod_meta = prod_meta_map.get(p_id, {})
+        display_name = prod_meta.get("tr_name") or prod_meta.get("name") or i.get("productName")
+
         items.append({
-    "id": str(i["_id"]),
-    "productId": i.get("productId"),
-    "productName": i.get("productName"),
+            "id": str(i["_id"]),
+            "productId": p_id,
+            "productName": display_name,
     "quantity": i.get("quantity"),
 
     # 🔥 ADMIN FİYATLAR
