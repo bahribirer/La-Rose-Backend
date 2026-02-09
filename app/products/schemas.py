@@ -18,3 +18,15 @@ class Product(BaseModel):
     cost: Optional[float] = None
     markup: Optional[float] = None
     margin: Optional[float] = None
+
+class BulkUpdateItem(BaseModel):
+    id: str
+    psf_price: Optional[float] = None
+    esf_price: Optional[float] = None
+    wsf_price: Optional[float] = None
+    price_eur: Optional[float] = None
+    price_51: Optional[float] = None
+    cost: Optional[float] = None
+    category: Optional[str] = None
+    volume: Optional[str] = None
+    name: Optional[str] = None

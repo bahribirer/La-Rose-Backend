@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query, Depends, HTTPException
-from typing import Optional
 from app.products.service import load_products_public
+from app.products.schemas import BulkUpdateItem
+from typing import Optional, List
 from app.admin.dependencies import admin_required
 from app.core.database import db
 
@@ -38,7 +39,7 @@ async def list_products(
     }
 
 @router.post("/admin/bulk-update", dependencies=[Depends(admin_required)])
-async def bulk_update_products(payload: list):
+async def bulk_update_products(payload: List[BulkUpdateItem]):
     """
     Accepts a list of {id: string, ...updates} objects
     """
@@ -46,11 +47,11 @@ async def bulk_update_products(payload: list):
     
     operations = []
     for item in payload:
-        p_id = item.get("id")
+        p_id = item.id
         if not p_id: continue
         
-        # Remove id from $set payload
-        updates = {k: v for k, v in item.items() if k != "id"}
+        # Convert Pydantic model to dict, exclude unset fields and id
+        updates = item.dict(exclude_unset=True, exclude={"id"})
         if not updates: continue
         
         operations.append(
