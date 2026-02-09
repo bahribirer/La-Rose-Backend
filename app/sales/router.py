@@ -379,7 +379,16 @@ async def export_excel_report(
     async for r in db.sales_reports.find(query):
         reports.append(r)
         if "user_id" in r:
-            report_user_ids.add(r["user_id"])
+            uid = r["user_id"]
+            # Ensure hashable
+            if isinstance(uid, (str, ObjectId)):
+                report_user_ids.add(uid)
+            elif isinstance(uid, dict) and "$oid" in uid:
+                 # Handle extended json format if ever present
+                 try:
+                     report_user_ids.add(ObjectId(uid["$oid"]))
+                 except:
+                     pass
         
     if not reports:
         raise HTTPException(404, "Rapor bulunamadı")
@@ -387,9 +396,23 @@ async def export_excel_report(
     # Fetch user names for mapping
     user_map = {}
     if report_user_ids:
-        user_cursor = db.users.find({"_id": {"$in": list(report_user_ids)}})
-        async for u in user_cursor:
-            user_map[u["_id"]] = u.get("full_name") or u.get("email") or "Kullanici"
+        # Convert all to ObjectId if possible for query
+        search_ids = []
+        for uid in report_user_ids:
+            if isinstance(uid, ObjectId):
+                search_ids.append(uid)
+            elif isinstance(uid, str) and ObjectId.is_valid(uid):
+                search_ids.append(ObjectId(uid))
+        
+        if search_ids:
+            try:
+                user_cursor = db.users.find({"_id": {"$in": search_ids}})
+                async for u in user_cursor:
+                    user_map[u["_id"]] = u.get("full_name") or u.get("email") or "Kullanici"
+                    # Also map string version just in case
+                    user_map[str(u["_id"])] = user_map[u["_id"]]
+            except Exception as e:
+                print(f"❌ User fetch error: {e}")
 
     # GENERATE EXCEL
     import openpyxl
