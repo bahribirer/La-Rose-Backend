@@ -350,25 +350,16 @@ async def export_excel_report(
     elif competition_id:
          display_name = f"Yarisma_{competition_id}"
 
-    # Fetch all user names for mapping (Not critical for this flow but useful)
-    # user_cursor = db.users.find({"_id": {"$in": object_ids}}) if object_ids else None
-    # user_map = {}
-    # if user_cursor:
-    #     async for u in user_cursor:
-    #         user_map[u["_id"]] = u.get("full_name") or u.get("email") or "Kullanici"
-
-    # Sanitize filename (ASCII only)
-    import unicodedata
-    normalized = unicodedata.normalize('NFKD', display_name).encode('ascii', 'ignore').decode('ascii')
-    safe_name = "".join([c if c.isalnum() else "_" for c in normalized])
+    # Fetch unique user IDs from reports to ensure we have all names
+    # (The initial object_ids might be empty if competition_id is used)
+    # We'll do this AFTER fetching reports, or just fetch all users involved?
+    # Better: Fetch reports first, then extract user_ids, then fetch users.
     
     query = {}
     if object_ids:
         query["user_id"] = {"$in": object_ids}
     
     if pharmacy:
-        # Filter reports that start with the pharmacy name (case insensitive)
-        # Because reports are named like "PharmacyName - Date"
         import re
         query["name"] = {"$regex": f"^{re.escape(pharmacy)}", "$options": "i"}
 
@@ -380,17 +371,26 @@ async def export_excel_report(
     if competition_id:
         if ObjectId.is_valid(competition_id):
             query["competition_id"] = ObjectId(competition_id)
-            # Eğer competition_id varsa tarih filtresine gerek yok/yarışmanın kendi tarihleri geçerli
             if "createdAt" in query:
                 del query["createdAt"]
 
     reports = []
+    report_user_ids = set()
     async for r in db.sales_reports.find(query):
         reports.append(r)
+        if "user_id" in r:
+            report_user_ids.add(r["user_id"])
         
     if not reports:
         raise HTTPException(404, "Rapor bulunamadı")
-        
+
+    # Fetch user names for mapping
+    user_map = {}
+    if report_user_ids:
+        user_cursor = db.users.find({"_id": {"$in": list(report_user_ids)}})
+        async for u in user_cursor:
+            user_map[u["_id"]] = u.get("full_name") or u.get("email") or "Kullanici"
+
     # GENERATE EXCEL
     import openpyxl
     import io
@@ -400,15 +400,8 @@ async def export_excel_report(
     ws = wb.active
     ws.title = "Satis Detaylari"
     
-    # COLUMN MAPPING
-    # Key -> (Header Name, Data Extractor Function)
-    # COLUMN MAPPING
-    # Key -> (Header Name, Data Extractor Function)
-    # COLUMN MAPPING
-    # Key -> (Header Name, Data Extractor Function)
-    # COLUMN MAPPING
-    # Key -> (Header Name, Data Extractor Function)
     column_map = {
+        "user_name": ("Kullanıcı Adı", lambda r, i, p: user_map.get(r.get("user_id"), "Bilinmeyen")),
         "date": ("Tarih", lambda r, i, p: i.get("date") or r.get("createdAt").strftime("%d.%m.%Y")),
         "barcode": ("Barkod Numarası", lambda r, i, p: i.get("barcode") or i.get("productId") or "-"),
         "product_name": ("Ürün Adı", lambda r, i, p: p.get("tr_name") or p.get("name") or i.get("productName", "Bilinmeyen")),
@@ -430,9 +423,9 @@ async def export_excel_report(
     if columns:
         selected_keys = [k.strip() for k in columns.split(",") if k.strip() in column_map]
     else:
-        # Default columns (14 cols now)
+        # Default columns (15 cols now)
         selected_keys = [
-            "date", "barcode", "product_name", "category", "unit_price", "quantity", 
+            "user_name", "date", "barcode", "product_name", "category", "unit_price", "quantity", 
             "total_gross", "discount", "net_sales", "esf", "maliyet", 
             "kar", "markup", "karlilik", "report_type"
         ]
