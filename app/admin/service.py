@@ -131,26 +131,30 @@ async def get_top_products(start: datetime, end: datetime, limit: Optional[int] 
     if limit:
         pipeline.append({"$limit": limit})
 
+    cursor = db.sales_items.aggregate(pipeline)
+
     # 🔍 Fetch products for latest TR names
     all_products = await db.products.find({}).to_list(None)
     prod_meta_map = {p["id"]: p for p in all_products}
 
-    top_products = []
-    async for r in cursor:
-        p_id = r["_id"].get("productId")
-        prod_meta = prod_meta_map.get(p_id, {})
-        display_name = prod_meta.get("tr_name") or prod_meta.get("name") or r["_id"].get("productName", "Bilinmeyen Ürün")
-        
-        top_products.append({
-            "product_id": str(p_id) if p_id else None,
-            "product_name": display_name,
+    top_products = [
+        {
+            "product_id": (
+                str(r["_id"]["productId"])
+                if r["_id"].get("productId") else None
+            ),
+            "product_name": prod_meta_map.get(r["_id"].get("productId"), {}).get("tr_name") or r["_id"]["productName"],
             "quantity": int(r.get("quantity", 0)),
             "total_profit": round(r.get("total_profit", 0), 2),
             "total_cost": round(r.get("total_cost", 0), 2),
+            # 🔥 FALLBACK: Sayısal veri yoksa Kâr + Maliyet = Ciro yaklaşımı
             "total_sales": round(
                 r.get("total_sales", 0) or (r.get("total_profit", 0) + r.get("total_cost", 0)), 2
             ),
-        })
+        }
+        async for r in cursor
+    ]
+    
     if top_products:
         print(f"🚀 TOP PRODUCTS SAMPLE: {top_products[0]}")
     
