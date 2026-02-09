@@ -91,6 +91,22 @@ def parse_line_based_sales_report(
             if normalize_barcode(raw_line):
                 break
             
+            # 🛑 INVALID BARCODE DETECTION: If line starts with a short number
+            # that looks like a malformed barcode (4-8 digits), treat it as a new
+            # row boundary and skip it entirely (don't merge its data)
+            first_token = raw_line.split()[0] if raw_line.split() else ""
+            if first_token.isdigit() and 4 <= len(first_token) <= 8:
+                # This looks like a short/invalid barcode — skip this row entirely
+                print(f"  ⚠️ SKIPPING INVALID BARCODE ROW: '{raw_line[:60]}' (token: {first_token})")
+                # Skip all lines until next valid barcode
+                i += 1
+                while i < n:
+                    next_line = lines[i].strip()
+                    if is_footer_line(next_line) or normalize_barcode(next_line):
+                        break
+                    i += 1
+                break
+            
             # 🔥 FIX: Tokenize the line! Don't treat "4 157.00" as one token.
             tokens_in_line = raw_line.split()
             

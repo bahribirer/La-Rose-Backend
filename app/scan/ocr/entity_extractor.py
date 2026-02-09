@@ -78,7 +78,15 @@ def extract_items_from_entities(document) -> List[DocumentLineItem]:
             f = parse_float(v)
             return int(f) if f else 1
 
-        barcode = data.get("barcode")
+        raw_barcode = data.get("barcode") or ""
+        # 🛑 NORMALIZE: Strip whitespace, keep only digits
+        barcode = "".join(c for c in str(raw_barcode) if c.isdigit())
+        
+        # Validate: must be 13-digit EAN-13 starting with '3'
+        if len(barcode) != 13 or not barcode.startswith("3"):
+            print(f"⚠️ ENTITY: Skipping invalid barcode '{raw_barcode}' → '{barcode}'")
+            continue
+        
         qty = parse_int(data.get("quantity"))
         
         # Financials
@@ -88,19 +96,20 @@ def extract_items_from_entities(document) -> List[DocumentLineItem]:
         profit = parse_float(data.get("pharmacist_profit")) or parse_float(data.get("profit")) or parse_float(data.get("ecz_kar"))
         stock = parse_int(data.get("remaining_stock")) or parse_int(data.get("stock"))
 
-        if barcode:
-            item = DocumentLineItem(raw_text=parent.mention_text, confidence=parent.confidence)
-            item.barcode = barcode
-            item.quantity = qty
-            
-            # Use 'Exact Match' fields to bypass heuristic mappers
-            item.exact_quantity_match = qty
-            item.exact_price_match = unit_price
-            item.exact_total_match = total
-            item.exact_cost_match = cost
-            item.exact_profit_match = profit
-            item.exact_stock_match = stock
-            
-            items.append(item)
+        print(f"✅ ENTITY ITEM: barcode={barcode}, qty={qty}, total={total}, price={unit_price}")
+        
+        item = DocumentLineItem(raw_text=parent.mention_text, confidence=parent.confidence)
+        item.barcode = barcode
+        item.quantity = qty
+        
+        # Use 'Exact Match' fields to bypass heuristic mappers
+        item.exact_quantity_match = qty
+        item.exact_price_match = unit_price
+        item.exact_total_match = total
+        item.exact_cost_match = cost
+        item.exact_profit_match = profit
+        item.exact_stock_match = stock
+        
+        items.append(item)
 
     return items
