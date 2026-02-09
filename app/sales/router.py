@@ -403,42 +403,59 @@ async def export_user_reports(
     # Key -> (Header Name, Data Extractor Function)
     # COLUMN MAPPING
     # Key -> (Header Name, Data Extractor Function)
+    # COLUMN MAPPING
+    # Key -> (Header Name, Data Extractor Function)
     column_map = {
-        "date": ("Tarih", lambda r, i: i.get("date") or r.get("createdAt").strftime("%d.%m.%Y")),
-        "user_name": ("Kullanıcı", lambda r, i: user_map.get(r.get("user_id"), "-")),
-        "product_name": ("Ürün Adı", lambda r, i: i.get("productName", "Bilinmeyen")),
-        "quantity": ("Adet", lambda r, i: i.get("quantity", 0)),
-        "unit_price": ("Birim Fiyat", lambda r, i: i.get("unitPrice") or i.get("birim_fiyat") or 0),
-        "total_price": ("Net Satış", lambda r, i: i.get("totalPrice") or i.get("tutar") or 0),
-        "barcode": ("Barkod", lambda r, i: i.get("barcode") or i.get("productId") or "-"),
-        "stock": ("Stok", lambda r, i: i.get("stock", 0)),
-        "profit": ("Kâr", lambda r, i: i.get("profit") or i.get("ecz_kar") or 0),
-        "cost": ("Maliyet", lambda r, i: i.get("cost") or i.get("maliyet") or 0),
-        "report_name": ("Rapor Adı", lambda r, i: r.get("name", "-")),
+        "cat": ("KATEGORİ", lambda r, i, p: p.get("category") or "-"),
+        "gtin": ("GTIN", lambda r, i, p: p.get("gtin") or i.get("barcode") or i.get("productId") or "-"),
+        "product_name": ("PRODUCT", lambda r, i, p: i.get("productName", "Bilinmeyen")),
+        "ml": ("ML", lambda r, i, p: p.get("volume") or "-"),
+        "psf_2026": ("2026 PSF", lambda r, i, p: p.get("psf_price") or 0),
+        "esf": ("ESF", lambda r, i, p: p.get("esf_price") or 0),
+        "wsf": ("WSF", lambda r, i, p: p.get("wsf_price") or 0),
+        "price_eur": ("PRICE", lambda r, i, p: p.get("price_eur") or 0),
+        "price_51": ("51", lambda r, i, p: p.get("price_51") or 0),
+        "cost_tax": ("Maliyet", lambda r, i, p: p.get("cost") or i.get("cost") or 0),
+        "profit": ("Kär", lambda r, i, p: i.get("profit") or i.get("ecz_kar") or 0),
+        "markup": ("Markup", lambda r, i, p: p.get("markup") or 0),
+        "margin": ("Kärlılık", lambda r, i, p: p.get("margin") or 0),
+        "date": ("Tarih", lambda r, i, p: i.get("date") or r.get("createdAt").strftime("%d.%m.%Y")),
+        "user_name": ("Kullanıcı", lambda r, i, p: user_map.get(r.get("user_id"), "-")),
+        "quantity": ("Adet", lambda r, i, p: i.get("quantity", 0)),
+        "unit_price": ("Birim Fiyat", lambda r, i, p: i.get("unitPrice") or i.get("birim_fiyat") or 0),
+        "total_price": ("Net Satış", lambda r, i, p: i.get("totalPrice") or i.get("tutar") or 0),
+        "barcode": ("Barkod", lambda r, i, p: i.get("barcode") or i.get("productId") or "-"),
+        "stock": ("Stok", lambda r, i, p: i.get("stock", 0)),
+        "report_name": ("Rapor Adı", lambda r, i, p: r.get("name", "-")),
     }
 
-    
     # Determine columns to export
     if columns:
         selected_keys = [k.strip() for k in columns.split(",") if k.strip() in column_map]
     else:
-        # Default
-        selected_keys = ["date", "barcode", "product_name", "quantity", "stock", "unit_price", "total_price"]
+        # Default as per the photo
+        selected_keys = [
+            "cat", "gtin", "product_name", "ml", "psf_2026", "esf", "wsf", 
+            "price_eur", "price_51", "cost_tax", "profit", "markup", "margin"
+        ]
         
     # Write Headers
     ws.append([column_map[k][0] for k in selected_keys])
     
+    # 🔍 Fetch all products once for lookup
+    all_products = await db.products.find({}).to_list(None)
+    prod_meta_map = {p["id"]: p for p in all_products}
+
     for r in reports:
         items_cursor = db.sales_items.find({"report_id": r["_id"]})
-        has_items = False
         
         async for item in items_cursor:
-            has_items = True
-            row = [column_map[k][1](r, item) for k in selected_keys]
-            ws.append(row)
+            # Try to find metadata by barcode (productId)
+            barcode = item.get("productId")
+            prod_meta = prod_meta_map.get(barcode, {})
             
-        if not has_items:
-             pass
+            row = [column_map[k][1](r, item, prod_meta) for k in selected_keys]
+            ws.append(row)
         
     # SAVE TO BUFFER
     output = io.BytesIO()
