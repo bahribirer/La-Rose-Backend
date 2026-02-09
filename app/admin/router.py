@@ -927,6 +927,36 @@ async def admin_cancel_competition(competition_id: str):
 
     return { "status": "deleted" }
 
+
+@router.delete("/competitions/{competition_id}", dependencies=[Depends(admin_required)])
+async def admin_delete_competition(competition_id: str):
+    """Delete a completed competition and all related data."""
+    if not ObjectId.is_valid(competition_id):
+        raise HTTPException(400, "Invalid competition id")
+
+    comp = await db.competitions.find_one({ "_id": ObjectId(competition_id) })
+    if not comp:
+        raise HTTPException(404, "Competition not found")
+
+    # 🔥 HARD DELETE THE COMPETITION
+    await db.competitions.delete_one({ "_id": comp["_id"] })
+
+    # 🔥 BAĞLI KAYITLARI TEMİZLE
+    await db.competition_registrations.delete_many({
+        "competition_id": comp["_id"]
+    })
+
+    await db.competition_participants.delete_many({
+        "competition_id": comp["_id"]
+    })
+
+    # 🔥 SCOREBOARD VERİLERİNİ TEMİZLE (varsa)
+    await db.scoreboards.delete_many({
+        "competition_id": comp["_id"]
+    })
+
+    return { "status": "deleted" }
+
 @router.get(
     "/competitions/{competition_id}/participants",
     dependencies=[Depends(admin_required)]
