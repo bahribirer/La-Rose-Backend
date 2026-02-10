@@ -552,6 +552,7 @@ async def get_sales_report_detail(
     "profit": i.get("profit"),
     "cost": i.get("cost"),
     "confidence": i.get("confidence"),
+    "date": i.get("date"),
 })
 
 
