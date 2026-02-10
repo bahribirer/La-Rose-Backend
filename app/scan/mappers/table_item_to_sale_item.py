@@ -7,10 +7,24 @@ from app.scan.normalizers.product_total_normalizer import (
 def table_item_to_sale_item(item, product_map):
     if not item.barcode:
         return None
-
-    product = product_map.get(item.barcode)
+        
+    # Robust cleanup: ensure strictly digits-only string for lookup
+    clean_barcode = "".join(c for c in str(item.barcode) if c.isdigit())
+    
+    product = product_map.get(clean_barcode)
+    
+    # Check original if clean failed (fallback)
     if not product:
+        product = product_map.get(item.barcode)
+
+    if not product:
+        # Debugging: Why is it failing?
+        print(f"⚠️ MAPPER FAIL: Barcode '{clean_barcode}' (Orig: '{item.barcode}') not found in {len(product_map)} keys.")
+        # Try finding by name fuzzy match? (Optional optimization later)
         return None
+    else:
+        # print(f"✅ MAPPER SUCCESS: Found {product.get('name')} for {clean_barcode}")
+        pass
 
     # 🔥 STRUCTURAL PRIORITY (Full Semantic Mapping)
     

@@ -64,6 +64,8 @@ async def scan_report_bytes(binary: bytes) -> dict:
             norm_bc = "".join(c for c in str(raw_bc) if c.isdigit())
             if norm_bc:
                 product_map[norm_bc] = p
+    
+    print(f"📦 PRODUCT MAP LOADED: {len(product_map)} keys (from {len(products)} products)")
 
     # ---------- OCR ----------
     document = await asyncio.to_thread(
