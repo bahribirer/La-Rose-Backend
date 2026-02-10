@@ -103,7 +103,8 @@ def extract_items_from_entities(document) -> List[DocumentLineItem]:
 
         print(f"✅ ENTITY ITEM: barcode={barcode}, qty={qty}, total={total}, price={unit_price}, disc={discount}, tax={tax}, gross={gross_total}")
         
-        item = DocumentLineItem(raw_text=parent.mention_text, confidence=parent.confidence)
+        text_fallback = parent.mention_text or f"Entity Product: {barcode}"
+        item = DocumentLineItem(raw_text=text_fallback, confidence=parent.confidence)
         item.barcode = barcode
         item.quantity = qty
         

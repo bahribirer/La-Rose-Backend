@@ -139,14 +139,18 @@ class ProductTotalStrategy(ReportStrategy):
                 if i.raw_text
             ]
 
-            sale_items: List[SaleItemFromScan] = []
+            parsed_items: list = []
+            for i in table_items:
+                # Accept if it has explicit semantic match OR raw text
+                # We trust Entity Extractor items even if raw_text is weak
+                if (i.exact_quantity_match and (i.exact_total_match or i.exact_price_match)) or i.raw_text:
+                    parsed_items.append(parse_table_line(i))
 
             print(f"🔄 Looping through {len(parsed_items)} parsed items...")
             for item in parsed_items:
                 print(f"👉 Processing item: {item.barcode} | Raw: {item.raw_text[:20]}...")
                 
                 sale = table_item_to_sale_item(item, product_map)
-                
                 if sale:
                     print(f"✅ Mapper returned sale item for {item.barcode}")
                     sale_items.append(sale)
