@@ -171,6 +171,11 @@ def parse_line_based_sales_report(
                 urun_id=product["id"],
                 urun_name=product.get("tr_name") or product.get("name"),
                 miktar=selected_qty,
+                
+                # 🔥 ADMIN-ONLY FIELDS (Adding missing price fields)
+                birim_fiyat=unit_price,
+                tutar=tutar,
+                
                 maliyet=maliyet,
                 ecz_kar=ecz_kar,
                 match_confidence=confidence,

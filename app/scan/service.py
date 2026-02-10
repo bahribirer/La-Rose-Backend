@@ -52,7 +52,13 @@ async def scan_report_bytes(binary: bytes) -> dict:
 
     # ---------- PRODUCTS ----------
     products = await get_products_cached()
-    product_map = {p["id"]: p for p in products}
+    
+    # 🧠 Hybrid Key Map: Support both ID and Barcode lookup
+    product_map = {}
+    for p in products:
+        product_map[p["id"]] = p
+        if p.get("barcode"):
+            product_map[p["barcode"]] = p
 
     # ---------- OCR ----------
     document = await asyncio.to_thread(
