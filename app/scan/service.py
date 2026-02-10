@@ -101,6 +101,7 @@ async def scan_report_bytes(binary: bytes) -> dict:
                 "ecz_kar": i.ecz_kar,
 
                 "confidence": i.match_confidence,
+                "date": i.date,
             }
             for i in items
         ],
@@ -140,6 +141,7 @@ async def scan_report_bytes(binary: bytes) -> dict:
                 "iskonto": i.discount,
                 "kdv": i.tax,
                 "satis_tutari": i.gross_total,
+                "date": i.date,
             }
             for i in items
         ],
