@@ -141,10 +141,17 @@ class ProductTotalStrategy(ReportStrategy):
 
             sale_items: List[SaleItemFromScan] = []
 
+            print(f"🔄 Looping through {len(parsed_items)} parsed items...")
             for item in parsed_items:
+                print(f"👉 Processing item: {item.barcode} | Raw: {item.raw_text[:20]}...")
+                
                 sale = table_item_to_sale_item(item, product_map)
+                
                 if sale:
+                    print(f"✅ Mapper returned sale item for {item.barcode}")
                     sale_items.append(sale)
+                else:
+                    print(f"❌ Mapper returned None for {item.barcode}")
 
             if sale_items:
                 print("✅ PRODUCT_TOTAL → TABLE MODE SUCCESS")

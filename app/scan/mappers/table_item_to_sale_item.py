@@ -5,6 +5,7 @@ from app.scan.normalizers.product_total_normalizer import (
 
 
 def table_item_to_sale_item(item, product_map):
+    print(f"🏁 ENTERING MAPPER for {item.barcode}...")
     if not item.barcode:
         return None
         
