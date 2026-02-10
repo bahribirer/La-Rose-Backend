@@ -180,18 +180,24 @@ def parse_excel_sales(content: bytes) -> List[Dict]:
                 
         # Calculate Net Sales (Tutar)
         # Tutar (Net Sales) - Either from file or calculated
-        net_sales = 0.0
+        # 🔥 FIX: Override 'tutar' with computed value using discount
+        net_sales_file = 0.0
         if "total_price" in col_map:
              try:
                 val = row[col_map["total_price"]]
-                net_sales = float(val) if pd.notna(val) else 0.0
+                net_sales_file = float(val) if pd.notna(val) else 0.0
              except:
-                net_sales = 0.0
+                net_sales_file = 0.0
 
-        # Calculate Net Sales if missing but we have unit price
-        if net_sales == 0.0 and unit_price > 0:
+        net_sales = net_sales_file
+        
+        # If we have components, compute strictly
+        if unit_price > 0 and quantity > 0:
             gross_total = unit_price * quantity
-            net_sales = gross_total - discount_vat
+            computed_net = gross_total - discount_vat
+            
+            # Use computed net strictly (Fix user issue: discount subtraction missing)
+            net_sales = computed_net
             
         if net_sales < 0:
             net_sales = 0.0 # Should not be negative usually
