@@ -139,6 +139,7 @@ class ProductTotalStrategy(ReportStrategy):
                 if i.raw_text
             ]
 
+            sale_items: List[SaleItemFromScan] = []
             parsed_items: list = []
             for i in table_items:
                 # Accept if it has explicit semantic match OR raw text
