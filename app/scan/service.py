@@ -277,6 +277,10 @@ async def scan_report_excel(binary: bytes) -> dict:
                 "birim_fiyat": i["birim_fiyat"],
                 "tutar": i["tutar"],
                 "iskonto": i["discount_vat"],
+                
+                "discount": i["discount_vat"], # ✅ Fix Mobile Mapping
+                "discount_vat": i["discount_vat"], # ✅ Fix Mobile Mapping
+                
                 "satis_tutari": i["tutar"] + i["discount_vat"],
                 "date": i.get("date"), # ✅ FIX: Passthrough date to mobile
             }
