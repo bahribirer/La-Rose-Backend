@@ -57,8 +57,13 @@ async def scan_report_bytes(binary: bytes) -> dict:
     product_map = {}
     for p in products:
         product_map[p["id"]] = p
-        if p.get("barcode"):
-            product_map[p["barcode"]] = p
+        
+        # Normalize barcode key for robust lookup (digits only)
+        raw_bc = p.get("barcode")
+        if raw_bc:
+            norm_bc = "".join(c for c in str(raw_bc) if c.isdigit())
+            if norm_bc:
+                product_map[norm_bc] = p
 
     # ---------- OCR ----------
     document = await asyncio.to_thread(
