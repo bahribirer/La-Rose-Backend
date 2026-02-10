@@ -95,8 +95,13 @@ def extract_items_from_entities(document) -> List[DocumentLineItem]:
         cost = parse_float(data.get("cost")) or parse_float(data.get("maliyet"))
         profit = parse_float(data.get("pharmacist_profit")) or parse_float(data.get("profit")) or parse_float(data.get("ecz_kar"))
         stock = parse_int(data.get("remaining_stock")) or parse_int(data.get("stock"))
+        
+        # Extended Financials
+        discount = parse_float(data.get("discount_amount")) or parse_float(data.get("discount")) or parse_float(data.get("iskonto"))
+        tax = parse_float(data.get("tax_amount")) or parse_float(data.get("tax")) or parse_float(data.get("vat_amount")) or parse_float(data.get("kdv"))
+        gross_total = parse_float(data.get("gross_amount")) or parse_float(data.get("satis_tutari")) or parse_float(data.get("gross_sales"))
 
-        print(f"✅ ENTITY ITEM: barcode={barcode}, qty={qty}, total={total}, price={unit_price}")
+        print(f"✅ ENTITY ITEM: barcode={barcode}, qty={qty}, total={total}, price={unit_price}, disc={discount}, tax={tax}, gross={gross_total}")
         
         item = DocumentLineItem(raw_text=parent.mention_text, confidence=parent.confidence)
         item.barcode = barcode
@@ -109,6 +114,11 @@ def extract_items_from_entities(document) -> List[DocumentLineItem]:
         item.exact_cost_match = cost
         item.exact_profit_match = profit
         item.exact_stock_match = stock
+        
+        # Extended matches
+        item.discount_amount = discount
+        item.tax_amount = tax
+        item.gross_total = gross_total
         
         items.append(item)
 

@@ -29,6 +29,11 @@ class DocumentLineItem:
         self.ecz_kar: Optional[float] = None
         self.maliyet: Optional[float] = None
         
+        # 🔥 EXTENDED FINANCIALS
+        self.discount_amount: Optional[float] = None
+        self.tax_amount: Optional[float] = None
+        self.gross_total: Optional[float] = None
+        
         # 🔥 SMART TABLE PARSING
         self.quantity_candidates: List[int] = []
         self.exact_quantity_match: Optional[int] = None

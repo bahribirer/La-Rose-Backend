@@ -113,11 +113,20 @@ async def scan_report_bytes(binary: bytes) -> dict:
                 "unitPrice": i.birim_fiyat,
                 "totalPrice": i.tutar,
                 
+                # Extended Financials
+                "discountAmount": i.discount,
+                "discount_vat": i.discount, # ✅ MATCH EXCEL UPLOAD KEY
+                "taxAmount": i.tax,
+                "grossTotal": i.gross_total,
+                
                 # Keep snake_case for backward compatibility
                 "ecz_kar": i.ecz_kar,
                 "maliyet": i.maliyet,
                 "birim_fiyat": i.birim_fiyat,
                 "tutar": i.tutar,
+                "iskonto": i.discount,
+                "kdv": i.tax,
+                "satis_tutari": i.gross_total,
             }
             for i in items
         ],
@@ -242,11 +251,18 @@ async def scan_report_excel(binary: bytes) -> dict:
                 "barcode": i["barcode"],
                 "stock": i["stock"],
                 
+                # Extended Financials
+                "discountAmount": i["discount_vat"],
+                "taxAmount": 0.0,
+                "grossTotal": i["tutar"] + i["discount_vat"],
+                
                 # Legacy
                 "ecz_kar": i["ecz_kar"],
                 "maliyet": i["maliyet"],
                 "birim_fiyat": i["birim_fiyat"],
                 "tutar": i["tutar"],
+                "iskonto": i["discount_vat"],
+                "satis_tutari": i["tutar"] + i["discount_vat"],
                 "date": i.get("date"), # ✅ FIX: Passthrough date to mobile
             }
             for i in items

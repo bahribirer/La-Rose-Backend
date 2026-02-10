@@ -67,6 +67,18 @@ class SaleItemFromScan(BaseModel):
         alias="discount_vat"
     )
 
+    tax: Optional[float] = Field(
+        default=0.0,
+        description="KDV tutarı",
+        alias="tax_amount"
+    )
+
+    gross_total: Optional[float] = Field(
+        default=0.0,
+        description="Satış tutarı (Brüt)",
+        alias="gross_total"
+    )
+
     date: Optional[str] = Field(
         default=None,
         description="Satış tarihi (Excel'den)"

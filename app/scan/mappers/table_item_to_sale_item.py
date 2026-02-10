@@ -40,12 +40,20 @@ def table_item_to_sale_item(item, product_map):
         # Case A: We have Total & Qty (Calculate Unit Price)
         if sem_tutar:
             tutar = sem_tutar
-            unit_price = sem_price or (round(tutar / selected_qty, 2) if selected_qty > 0 else 0)
+            if sem_price:
+                unit_price = sem_price
+            else:
+                # Back-calculate Gross Unit Price: (Net + Discount) / Qty
+                discount_val = getattr(item, 'discount_amount', 0.0) or 0.0
+                gross_calc = tutar + discount_val
+                unit_price = round(gross_calc / selected_qty, 2) if selected_qty > 0 else 0
             
         # Case B: We have Unit Price & Qty (Calculate Total)
         elif sem_price:
             unit_price = sem_price
-            tutar = round(unit_price * selected_qty, 2)
+            gross_calc = unit_price * selected_qty
+            discount_val = getattr(item, 'discount_amount', 0.0) or 0.0
+            tutar = round(gross_calc - discount_val, 2)
 
         maliyet = sem_cost or 0.0 
         ecz_kar = sem_profit or 0.0
@@ -80,6 +88,11 @@ def table_item_to_sale_item(item, product_map):
 ))
 
 
+    # Discount / Tax / Gross
+    discount = item.discount_amount or 0.0
+    tax = item.tax_amount or 0.0
+    gross_total = item.gross_total or (round(unit_price * selected_qty, 2) if unit_price and selected_qty else 0.0)
+
     return SaleItemFromScan(
         urun_id=item.barcode,
         urun_name=product.get("tr_name") or product.get("name"),
@@ -88,6 +101,11 @@ def table_item_to_sale_item(item, product_map):
         # 🔥 ADMIN-ONLY FIELDS
         birim_fiyat=unit_price,
         tutar=tutar,
+        
+        # Extended Financials
+        discount=discount,
+        tax=tax,
+        gross_total=gross_total,
 
         # mevcut finansal alanlar
         maliyet=maliyet,
