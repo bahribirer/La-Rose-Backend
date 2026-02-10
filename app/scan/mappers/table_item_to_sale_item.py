@@ -58,10 +58,10 @@ def table_item_to_sale_item(item, product_map):
             if sem_price:
                 unit_price = sem_price
             else:
-                # Back-calculate Gross Unit Price: (Net + Discount) / Qty
-                discount_val = getattr(item, 'discount_amount', 0.0) or 0.0
-                gross_calc = tutar + discount_val
-                unit_price = round(gross_calc / selected_qty, 2) if selected_qty > 0 else 0
+                # User Request (Step 3240): Use Gross Line Total (Net + Tax = 1224.0) as 'Birim Fiyat'.
+                # "1224 birim fiyat olarak yazcak çünkü 2 yle çarpmış zaten"
+                tax_val = getattr(item, 'tax_amount', 0.0) or 0.0
+                unit_price = tutar + tax_val
             
         # Case B: We have Unit Price & Qty (Calculate Total)
         elif sem_price:
