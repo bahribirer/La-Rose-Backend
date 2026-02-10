@@ -31,6 +31,27 @@ class ProductTotalStrategy(ReportStrategy):
     ) -> Dict[str, Any]:
 
         print("🟢 Using ProductTotalStrategy (HYBRID MODE)")
+        
+        # 📅 EXTRACT REPORT DATE
+        import re
+        extracted_date = None
+        try:
+            full_text = document.text or ""
+            # 1. Döküm Tarihi
+            match_print = re.search(r'Döküm Tarihi\s*:\s*(\d{2}[./]\d{2}[./]\d{4})', full_text, re.IGNORECASE)
+            if match_print:
+                extracted_date = match_print.group(1).replace('/', '.')
+            
+            # 2. Rapor Tarih Aralığı (End Date)
+            if not extracted_date:
+                match_range = re.search(r'(\d{2}[./]\d{2}[./]\d{4})\s*-\s*(\d{2}[./]\d{2}[./]\d{4})', full_text)
+                if match_range:
+                    extracted_date = match_range.group(2).replace('/', '.')
+            
+            if extracted_date:
+                print(f"📅 SCAN DATE EXTRACTED: {extracted_date}")
+        except:
+            pass
 
         # ==================================================
         # 0️⃣ ENTITY MODE (CUSTOM PROCESSOR) - 🚀 PRIORITY 1
@@ -153,6 +174,9 @@ class ProductTotalStrategy(ReportStrategy):
                 
                 sale = table_item_to_sale_item(item, product_map)
                 if sale:
+                    if extracted_date:
+                        sale.date = extracted_date
+                        
                     print(f"✅ Mapper returned sale item for {item.barcode}")
                     sale_items.append(sale)
                 else:
@@ -185,6 +209,10 @@ class ProductTotalStrategy(ReportStrategy):
         items = parse_line_based_sales_report(lines, product_map)
 
         if items:
+            if extracted_date:
+                for it in items:
+                    it.date = extracted_date
+                    
             print(f"✅ PRODUCT_TOTAL → LINE MODE SUCCESS ({len(items)} items)")
             return {
                 "items": items
