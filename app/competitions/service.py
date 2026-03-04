@@ -127,18 +127,24 @@ async def get_user_competition_status(user_id: ObjectId):
             is_finished_individually = True
             
         if not is_finished_individually:
-             return {
+            # Lig bazlı yarışmalarda kayıt her zaman açık
+            _has_league = next_comp and next_comp.get("league")
+            _can_reg = _has_league or (is_registration_period_tr() and next_comp is not None)
+            return {
                 "status": "missed",
                 "competition": current,
-                "can_register_next": is_registration_period_tr() and next_comp is not None,
+                "can_register_next": _can_reg,
             }
 
-    # Kayıt açık mı? (Eğer next_comp varsa ve henüz kayıtlı değilsek)
-    if next_comp and is_registration_period_tr():
-        return {
-            "status": "registration_open",
-            "competition": next_comp,
-        }
+    # Kayıt açık mı?
+    # Lig bazlı yarışmalarda her zaman açık, eski yapıda sadece 25+ gün
+    if next_comp:
+        has_league = next_comp.get("league")
+        if has_league or is_registration_period_tr():
+            return {
+                "status": "registration_open",
+                "competition": next_comp,
+            }
 
     # Son Yarışma Kontrolü (Ended)
     ended_query = {"status": "completed", **league_filter()}

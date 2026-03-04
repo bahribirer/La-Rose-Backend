@@ -52,16 +52,17 @@ async def register_next_competition(
 ):
     now = datetime.utcnow()
 
-    if not is_registration_period_tr():
+    next_comp = await get_next_competition()
+    if not next_comp:
+        raise HTTPException(404, "No upcoming competition")
 
+    # Lig bazlı yarışmalarda kayıt dönem kısıtlaması yok
+    has_league = next_comp.get("league")
+    if not has_league and not is_registration_period_tr():
         raise HTTPException(
             status_code=400,
             detail="Registration period not started",
         )
-
-    next_comp = await get_next_competition()
-    if not next_comp:
-        raise HTTPException(404, "No upcoming competition")
 
     exists = await db.competition_registrations.find_one({
         "user_id": current_user["_id"],
