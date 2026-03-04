@@ -163,6 +163,7 @@ async def match_pharmacy(
                 "pharmacy_name": pharmacy.get("pharmacy_name"),
                 "district": pharmacy.get("district"),
                 "region": region,
+                "league": pharmacy.get("league"),
                 # 🔥 SADECE STRING
                 "representative": representative_name,
                 "updated_at": datetime.utcnow(),

@@ -24,6 +24,7 @@ async def search_pharmacies(
             "pharmacy_name": 1,
             "district": 1,
             "region": 1,
+            "league": 1,
             "representative": 1,
         },
     ).limit(limit)
@@ -36,6 +37,7 @@ async def search_pharmacies(
                 "pharmacy_name": doc["pharmacy_name"],
                 "district": doc.get("district"),
                 "region": doc.get("region"),
+                "league": doc.get("league"),
                 "representative": doc.get("representative"),
             }
         )

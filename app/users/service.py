@@ -48,6 +48,7 @@ def serialize_profile(user: dict, profile: Optional[dict]):
         ),
         "pharmacy_name": profile.get("pharmacy_name") if profile else None,
         "region": profile.get("region") if profile else None,
+        "league": profile.get("league") if profile else None,
         "district": profile.get("district") if profile else None,
 
         "representative": rep,
@@ -221,6 +222,7 @@ async def try_auto_match_pharmacy(user_id: ObjectId):
                 "pharmacy_name": pharmacy["pharmacy_name"],
                 "district": pharmacy.get("district"),
                 "region": pharmacy.get("region"),
+                "league": pharmacy.get("league"),
                 "representative": pharmacy.get("representative"),
                 "updated_at": datetime.utcnow(),
             },

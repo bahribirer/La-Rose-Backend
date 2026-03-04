@@ -30,6 +30,7 @@ class UserProfileResponse(BaseModel):
     pharmacy_id: Optional[str] = None
     pharmacy_name: Optional[str] = None
     region: Optional[str] = None
+    league: Optional[str] = None
     representative: Optional[str] = None
 
 
