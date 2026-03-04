@@ -129,7 +129,6 @@ async def list_users():
   "$addFields": {
     "pharmacy_name": "$profile.pharmacy_name",
     "district": "$profile.district",
-    "region": "$profile.region",
     "league": "$profile.league",
 
     # 🔥 REPRESENTATIVE NORMALIZE
@@ -176,7 +175,6 @@ async def list_users():
 
                 "pharmacy_name": 1,
                 "district": 1,
-                "region": 1,
                 "league": 1,
                 "representative": 1,
 
@@ -207,7 +205,6 @@ async def list_users():
 
             "pharmacy_name": u.get("pharmacy_name"),
             "district": u.get("district"),
-            "region": u.get("region"),
             "league": u.get("league"),
             "representative": u.get("representative"),
 
@@ -402,14 +399,11 @@ async def representatives_performance(
             }
         },
 
-        # 🔹 group by representative + region
+        # 🔹 group by representative
         {
             "$group": {
-                "_id": {
-                    "representative": "$rep_name",
-                    "league": "$league",
-                    "region": "$region"
-                },
+                "_id": "$rep_name",
+                "league": { "$first": "$league" },
                 "pharmacy_ids": { "$addToSet": "$pharmacy_id" },
                 "user_ids": { "$addToSet": "$user_id" }
             }
@@ -455,10 +449,9 @@ async def representatives_performance(
 
     db_results = {}
     async for r in cursor:
-        db_results[r["_id"]["representative"]] = {
-            "representative": r["_id"]["representative"],
-            "league": r["_id"].get("league"),
-            "region": r["_id"]["region"],
+        db_results[r["_id"]] = {
+            "representative": r["_id"],
+            "league": r.get("league"),
             "pharmacy_count": int(r.get("pharmacy_count", 0)),
             "user_count": int(r.get("user_count", 0)),
             "total_items": int(r.get("total_items", 0)),
@@ -475,7 +468,6 @@ async def representatives_performance(
             final_results.append({
                 "representative": rep_name,
                 "league": "-",
-                "region": "-",
                 "pharmacy_count": 0,
                 "user_count": 0,
                 "total_items": 0,
@@ -515,7 +507,7 @@ async def representative_detail(name: str):
             "$group": {
                 "_id": {
                     "representative": "$rep_name",
-                    "region": "$region"
+                    "league": "$league"
                 },
                 "user_ids": { "$addToSet": "$user_id" },
                 "pharmacies": { "$addToSet": "$pharmacy_name" }
