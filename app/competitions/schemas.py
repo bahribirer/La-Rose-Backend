@@ -5,6 +5,7 @@ class CompetitionResponse(BaseModel):
     id: str
     year: int
     month: int
+    league: str = "-"
     starts_at: datetime
     ends_at: datetime
 

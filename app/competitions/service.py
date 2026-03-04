@@ -30,21 +30,36 @@ async def get_user_competition_status(user_id: ObjectId):
     now_tr_time = now_tr()
     now_utc = datetime.utcnow()
 
+    # 🔥 KULLANICININ LİGİNİ BUL (eczanesinden)
+    user_profile = await db.user_profiles.find_one({"user_id": user_id})
+    user_league = None
+    if user_profile and user_profile.get("pharmacy_id"):
+        pharmacy = await db.pharmacies.find_one({"_id": user_profile["pharmacy_id"]})
+        if pharmacy:
+            user_league = pharmacy.get("league")
+
+    # Lig filtresi: league alanı yoksa (eski yarışmalar) veya eşleşiyorsa göster
+    def league_filter():
+        if user_league:
+            return {"$or": [{"league": user_league}, {"league": {"$exists": False}}]}
+        return {}
+
     # 0️⃣ GELECEK YARIŞMA (UPCOMING) - Kayıt/Geri sayım için lazım
-    next_comp = await db.competitions.find_one(
-        {
-            "status": { "$in": ["upcoming", "active"] }, # 🔥 'active' olsa da henüz başlamamış olabilir
-            "starts_at": {"$gt": now_utc},
-        },
-        sort=[("starts_at", 1)]
-    )
+    next_query = {
+        "status": {"$in": ["upcoming", "active"]},
+        "starts_at": {"$gt": now_utc},
+        **league_filter(),
+    }
+    next_comp = await db.competitions.find_one(next_query, sort=[("starts_at", 1)])
 
     # 1️⃣ AKTİF YARIŞMA SORGUSU (En yüksek öncelik)
-    current = await db.competitions.find_one({
-        "status": { "$in": ["active", "upcoming"] }, # 🔥 ZAMANI GELMİŞSE UPCOMING DE AKTİF SAYILIR
+    current_query = {
+        "status": {"$in": ["active", "upcoming"]},
         "starts_at": {"$lte": now_utc},
         "ends_at": {"$gte": now_utc},
-    })
+        **league_filter(),
+    }
+    current = await db.competitions.find_one(current_query)
 
     if current:
         # 🛡️ OTO-AKTİVASYON (Admin başlatmayı unutmuşsa veya 1 Ocak geldiyse)
@@ -126,10 +141,8 @@ async def get_user_competition_status(user_id: ObjectId):
         }
 
     # Son Yarışma Kontrolü (Ended)
-    last = await db.competitions.find_one(
-        { "status": "completed" },
-        sort=[("ends_at", -1), ("ended_at", -1)]
-    )
+    ended_query = {"status": "completed", **league_filter()}
+    last = await db.competitions.find_one(ended_query, sort=[("ends_at", -1), ("ended_at", -1)])
 
     if last:
         joined = await db.competition_participants.find_one({
@@ -150,3 +163,4 @@ async def get_user_competition_status(user_id: ObjectId):
             }
     
     return {"status": "none"}
+

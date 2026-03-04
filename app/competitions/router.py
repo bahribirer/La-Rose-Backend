@@ -35,6 +35,7 @@ async def get_status(current_user=Depends(get_current_db_user)):
             "id": str(c["_id"]),
             "year": c["year"],
             "month": c["month"],
+            "league": c.get("league", "-"),
             "starts_at": c["starts_at"],
             "ends_at": c["ends_at"],
         }

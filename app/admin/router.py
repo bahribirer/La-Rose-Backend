@@ -809,6 +809,7 @@ async def admin_list_competitions():
             "id": str(c["_id"]),
             "year": c["year"],
             "month": c["month"],
+            "league": c.get("league", "-"),
             "status": c.get("status", "upcoming"),
             "starts_at": c["starts_at"],
             "ends_at": c["ends_at"],
@@ -816,23 +817,37 @@ async def admin_list_competitions():
 
     return items
 
+from pydantic import BaseModel as PydanticBaseModel
+from typing import Optional as Opt
+
+class CreateCompetitionBody(PydanticBaseModel):
+    league: str
+    starts_at: str  # ISO datetime
+    ends_at: str    # ISO datetime
+    month: int
+
 @router.post("/competitions", dependencies=[Depends(admin_required)])
-async def admin_create_competition(year: int, month: int):
+async def admin_create_competition(body: CreateCompetitionBody):
+    starts_at = datetime.fromisoformat(body.starts_at.replace("Z", "+00:00")).replace(tzinfo=None)
+    ends_at = datetime.fromisoformat(body.ends_at.replace("Z", "+00:00")).replace(tzinfo=None)
+    year = starts_at.year
+    month = body.month
+
+    # Aynı lig + ay kontrolü
     exists = await db.competitions.find_one({
         "year": year,
         "month": month,
-        "status": { "$ne": "cancelled" }
+        "league": body.league,
+        "status": {"$ne": "cancelled"}
     })
 
     if exists:
-        raise HTTPException(400, "Competition already exists")
-
-    starts_at = datetime(year, month, 1)
-    ends_at = end_of_month_utc(year, month)
+        raise HTTPException(400, "Bu lig için aynı ayda zaten bir yarışma var")
 
     doc = {
         "year": year,
         "month": month,
+        "league": body.league,
         "starts_at": starts_at,
         "ends_at": ends_at,
         "status": "upcoming",
@@ -844,6 +859,7 @@ async def admin_create_competition(year: int, month: int):
     return {
         "id": str(res.inserted_id),
         "status": "upcoming",
+        "league": body.league,
     }
 
 
@@ -1046,6 +1062,8 @@ async def admin_competition_participants(competition_id: str):
             "competition": {
                 "year": competition["year"],
                 "month": competition["month"],
+                "league": competition.get("league", "-"),
+                "status": competition.get("status", "upcoming"),
             },
             "participants": []
         }
@@ -1114,6 +1132,7 @@ async def admin_competition_participants(competition_id: str):
         "competition": {
             "year": competition["year"],
             "month": competition["month"],
+            "league": competition.get("league", "-"),
             "status": competition.get("status"),
         },
         "participants": participants
