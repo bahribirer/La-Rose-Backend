@@ -17,3 +17,12 @@ ALL_REPRESENTATIVES = [
     "Mert Özbey",
     "Birsen"
 ]
+
+# Mümessil → Lig (SABİT)
+REPRESENTATIVE_LEAGUES = {
+    "Şeyma Kart": "1. Lig",
+    "Berkay Onar": "Süper Lig",
+    "Duygu Erkan": "Şampiyonlar Ligi",
+    "Mert Özbey": "Süper Lig",
+    "Birsen": "Şampiyonlar Ligi",
+}

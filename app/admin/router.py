@@ -426,7 +426,7 @@ async def representatives_performance(
         {
             "$group": {
                 "_id": "$rep_name",
-                "league": { "$first": "$league" },
+                "leagues": { "$addToSet": "$league" },
                 "pharmacy_ids": { "$addToSet": "$pharmacy_id" },
                 "user_ids": { "$addToSet": "$user_id" }
             }
@@ -472,9 +472,11 @@ async def representatives_performance(
 
     db_results = {}
     async for r in cursor:
+        # Ligleri filtrele (None değerleri çıkar)
+        leagues = [l for l in r.get("leagues", []) if l]
         db_results[r["_id"]] = {
             "representative": r["_id"],
-            "league": r.get("league"),
+            "leagues": leagues,
             "pharmacy_count": int(r.get("pharmacy_count", 0)),
             "user_count": int(r.get("user_count", 0)),
             "total_items": int(r.get("total_items", 0)),
@@ -483,24 +485,22 @@ async def representatives_performance(
         }
 
     # 🔥 TÜM MÜMESSİLLERİN GÖRÜNMESİNİ SAĞLA (0 olsa bile)
-    # Eczane koleksiyonundan lig bilgsini çek
+    # Lig bilgisi SABİT haritadan alınır
     final_results = []
     for rep_name in ALL_REPRESENTATIVES:
         if rep_name in db_results:
             item = db_results[rep_name]
-            # Lig bilgisi yoksa eczanelerden çek
-            if not item.get("league"):
-                pharmacy = await db.pharmacies.find_one({"representative": rep_name})
-                if pharmacy:
-                    item["league"] = pharmacy.get("league", "-")
+            # Eğer aggregation'dan lig gelmemişse, eczanelerden çek
+            if not item["leagues"]:
+                pharmacy_leagues = await db.pharmacies.distinct("league", {"representative": rep_name})
+                item["leagues"] = [l for l in pharmacy_leagues if l]
             final_results.append(item)
         else:
-            # DB'de hiç kullanıcısı yok, eczanelerden lig bilgisini çek
-            pharmacy = await db.pharmacies.find_one({"representative": rep_name})
-            rep_league = pharmacy.get("league", "-") if pharmacy else "-"
+            # Eczanelerden ligleri çek
+            pharmacy_leagues = await db.pharmacies.distinct("league", {"representative": rep_name})
             final_results.append({
                 "representative": rep_name,
-                "league": rep_league,
+                "leagues": [l for l in pharmacy_leagues if l],
                 "pharmacy_count": 0,
                 "user_count": 0,
                 "total_items": 0,
@@ -573,11 +573,9 @@ async def representative_detail(name: str):
 
     r = doc[0]
 
-    # Lig bilgisini eczanelerden çek (fallback)
-    league = r.get("league")
-    if not league:
-        pharmacy = await db.pharmacies.find_one({"representative": rep_name})
-        league = pharmacy.get("league", "-") if pharmacy else "-"
+    # Ligleri eczanelerden çek
+    pharmacy_leagues = await db.pharmacies.distinct("league", {"representative": rep_name})
+    leagues = [l for l in pharmacy_leagues if l]
 
     # kullanıcı listesi (isim + email)
     users = []
@@ -590,7 +588,7 @@ async def representative_detail(name: str):
 
     return {
         "representative": r["_id"],
-        "league": league,
+        "leagues": leagues,
         "pharmacies": sorted([p for p in r.get("pharmacies", []) if p]),
         "users": users,
         "total_items": int(r.get("total_items", 0)),
