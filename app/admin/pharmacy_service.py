@@ -93,16 +93,23 @@ async def get_pharmacies_list(league: str = None, representative: str = None):
     return results
 
 async def create_pharmacy(data: dict):
-    # Normalize name if present
     if "pharmacy_name" in data:
         data["normalized_name"] = normalize_text(data["pharmacy_name"])
     
+    # Remove id from data if it exists to avoid MongoDB errors
+    if "id" in data:
+        del data["id"]
+        
     result = await db.pharmacies.insert_one(data)
     data["id"] = str(result.inserted_id)
+    
+    # Remove _id (ObjectId) before returning
+    if "_id" in data:
+        del data["_id"]
+        
     return data
 
 async def update_pharmacy(pharmacy_id: str, data: dict):
-    # Normalize name if present
     if "pharmacy_name" in data:
         data["normalized_name"] = normalize_text(data["pharmacy_name"])
     
@@ -112,15 +119,22 @@ async def update_pharmacy(pharmacy_id: str, data: dict):
     except:
         return None
         
+    # Remove id and _id from set data
+    update_data = {k: v for k, v in data.items() if k not in ["id", "_id"]}
+        
     result = await db.pharmacies.update_one(
         {"_id": obj_id},
-        {"$set": data}
+        {"$set": update_data}
     )
     
     if result.matched_count == 0:
         return None
         
-    return await db.pharmacies.find_one({"_id": obj_id})
+    doc = await db.pharmacies.find_one({"_id": obj_id})
+    if doc:
+        doc["id"] = str(doc["_id"])
+        del doc["_id"]
+    return doc
 
 async def delete_pharmacy(pharmacy_id: str):
     from bson import ObjectId
