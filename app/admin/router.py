@@ -465,10 +465,10 @@ async def representatives_performance(
 
     cursor = db.pharmacies.aggregate(pipeline)
 
-    db_results = {}
+    results = []
     async for r in cursor:
         leagues = sorted([l for l in r.get("leagues", []) if l])
-        db_results[r["_id"]] = {
+        results.append({
             "representative": r["_id"],
             "leagues": leagues,
             "pharmacy_count": int(r.get("pharmacy_count", 0)),
@@ -476,25 +476,11 @@ async def representatives_performance(
             "total_items": int(r.get("total_items", 0)),
             "total_profit": float(r.get("total_profit", 0)),
             "total_revenue": float(r.get("total_revenue", 0)),
-        }
+        })
 
-    # 🔥 TÜM MÜMESSİLLERİN GÖRÜNMESİNİ SAĞLA
-    final_results = []
-    for rep_name in ALL_REPRESENTATIVES:
-        if rep_name in db_results:
-            final_results.append(db_results[rep_name])
-        else:
-            final_results.append({
-                "representative": rep_name,
-                "leagues": [],
-                "pharmacy_count": 0,
-                "user_count": 0,
-                "total_items": 0,
-                "total_profit": 0,
-                "total_revenue": 0,
-            })
-
-    return final_results
+    # Satışa göre sırala
+    results.sort(key=lambda x: x["total_revenue"], reverse=True)
+    return results
 
 from fastapi import Depends, HTTPException
 from urllib.parse import unquote
