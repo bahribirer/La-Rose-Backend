@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from datetime import datetime
 from app.admin.dependencies import admin_required
 from app.competitions.utils import end_of_month_utc
+from app.pharmacies.constants import REGION_REPRESENTATIVES, ALL_REPRESENTATIVES
 from app.core.database import db
 from app.core.utils import serialize_mongo
 
@@ -452,9 +453,9 @@ async def representatives_performance(
 
     cursor = db.user_profiles.aggregate(pipeline)
 
-    results = []
+    db_results = {}
     async for r in cursor:
-        results.append({
+        db_results[r["_id"]["representative"]] = {
             "representative": r["_id"]["representative"],
             "league": r["_id"].get("league"),
             "region": r["_id"]["region"],
@@ -463,9 +464,26 @@ async def representatives_performance(
             "total_items": int(r.get("total_items", 0)),
             "total_profit": float(r.get("total_profit", 0)),
             "total_revenue": float(r.get("total_revenue", 0)),
-        })
+        }
 
-    return results
+    # 🔥 TÜM MÜMESSİLLERİN GÖRÜNMESİNİ SAĞLA (0 olsa bile)
+    final_results = []
+    for rep_name in ALL_REPRESENTATIVES:
+        if rep_name in db_results:
+            final_results.append(db_results[rep_name])
+        else:
+            final_results.append({
+                "representative": rep_name,
+                "league": "-",
+                "region": "-",
+                "pharmacy_count": 0,
+                "user_count": 0,
+                "total_items": 0,
+                "total_profit": 0,
+                "total_revenue": 0,
+            })
+
+    return final_results
 
 from fastapi import Depends, HTTPException
 from urllib.parse import unquote

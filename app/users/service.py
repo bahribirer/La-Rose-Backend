@@ -223,7 +223,10 @@ async def try_auto_match_pharmacy(user_id: ObjectId):
                 "district": pharmacy.get("district"),
                 "region": pharmacy.get("region"),
                 "league": pharmacy.get("league"),
-                "representative": pharmacy.get("representative"),
+                "representative": (
+                    pharmacy.get("representative").get("name") if isinstance(pharmacy.get("representative"), dict) 
+                    else pharmacy.get("representative") or REGION_REPRESENTATIVES.get(pharmacy.get("region"))
+                ),
                 "updated_at": datetime.utcnow(),
             },
             "$unset": {

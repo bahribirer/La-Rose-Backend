@@ -153,7 +153,12 @@ async def match_pharmacy(
         raise HTTPException(status_code=404, detail="Eczane bulunamadı")
 
     region = pharmacy.get("region")
-    representative_name = REGION_REPRESENTATIVES.get(region)
+    # 🔥 PRIORITIZE PHARMACY REP FIELD, FALLBACK TO CONSTANTS
+    rep_from_pharmacy = pharmacy.get("representative")
+    if isinstance(rep_from_pharmacy, dict):
+        representative_name = rep_from_pharmacy.get("name") or rep_from_pharmacy.get("full_name")
+    else:
+        representative_name = rep_from_pharmacy or REGION_REPRESENTATIVES.get(region)
 
     await db.user_profiles.update_one(
         {"user_id": current_user["_id"]},
@@ -164,7 +169,6 @@ async def match_pharmacy(
                 "district": pharmacy.get("district"),
                 "region": region,
                 "league": pharmacy.get("league"),
-                # 🔥 SADECE STRING
                 "representative": representative_name,
                 "updated_at": datetime.utcnow(),
             },
