@@ -129,7 +129,7 @@ async def list_users():
   "$addFields": {
     "pharmacy_name": "$profile.pharmacy_name",
     "district": "$profile.district",
-    "league": "$profile.league",
+    "pharmacy_id": "$profile.pharmacy_id",
 
     # 🔥 REPRESENTATIVE NORMALIZE
     "representative": {
@@ -138,9 +138,32 @@ async def list_users():
         "then": "$profile.representative.name",
         "else": "$profile.representative"
       }
-    }
+    },
+    "league": "$profile.league"
   }
 },
+
+        # 🔥 ECZANEDEN LIG/MUMESSIL FALLBACK
+        {
+            "$lookup": {
+                "from": "pharmacies",
+                "localField": "pharmacy_id",
+                "foreignField": "_id",
+                "as": "pharmacy_doc"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$pharmacy_doc",
+                "preserveNullAndEmptyArrays": True
+            }
+        },
+        {
+            "$addFields": {
+                "league": { "$ifNull": ["$league", "$pharmacy_doc.league"] },
+                "representative": { "$ifNull": ["$representative", "$pharmacy_doc.representative"] }
+            }
+        },
 
 
         # 🔹 SALES REPORTS JOIN
@@ -368,14 +391,14 @@ async def debug_report_item(report_id: str):
 
 @router.get("/representatives", dependencies=[Depends(admin_required)])
 async def representatives_performance(
-    region: Optional[str] = Query(default=None),
+    league: Optional[str] = Query(default=None),
 ):
     pipeline = []
 
-    # 🔥 BÖLGE FİLTRESİ (OPSİYONEL)
-    if region:
+    # 🔥 LİG FİLTRESİ (OPSİYONEL)
+    if league:
         pipeline.append({
-            "$match": { "region": region }
+            "$match": { "league": league }
         })
 
     pipeline += [
@@ -460,14 +483,24 @@ async def representatives_performance(
         }
 
     # 🔥 TÜM MÜMESSİLLERİN GÖRÜNMESİNİ SAĞLA (0 olsa bile)
+    # Eczane koleksiyonundan lig bilgsini çek
     final_results = []
     for rep_name in ALL_REPRESENTATIVES:
         if rep_name in db_results:
-            final_results.append(db_results[rep_name])
+            item = db_results[rep_name]
+            # Lig bilgisi yoksa eczanelerden çek
+            if not item.get("league"):
+                pharmacy = await db.pharmacies.find_one({"representative": rep_name})
+                if pharmacy:
+                    item["league"] = pharmacy.get("league", "-")
+            final_results.append(item)
         else:
+            # DB'de hiç kullanıcısı yok, eczanelerden lig bilgisini çek
+            pharmacy = await db.pharmacies.find_one({"representative": rep_name})
+            rep_league = pharmacy.get("league", "-") if pharmacy else "-"
             final_results.append({
                 "representative": rep_name,
-                "league": "-",
+                "league": rep_league,
                 "pharmacy_count": 0,
                 "user_count": 0,
                 "total_items": 0,
@@ -505,10 +538,8 @@ async def representative_detail(name: str):
         # kullanıcı & eczane setleri
         {
             "$group": {
-                "_id": {
-                    "representative": "$rep_name",
-                    "league": "$league"
-                },
+                "_id": "$rep_name",
+                "league": { "$first": "$league" },
                 "user_ids": { "$addToSet": "$user_id" },
                 "pharmacies": { "$addToSet": "$pharmacy_name" }
             }
@@ -542,6 +573,12 @@ async def representative_detail(name: str):
 
     r = doc[0]
 
+    # Lig bilgisini eczanelerden çek (fallback)
+    league = r.get("league")
+    if not league:
+        pharmacy = await db.pharmacies.find_one({"representative": rep_name})
+        league = pharmacy.get("league", "-") if pharmacy else "-"
+
     # kullanıcı listesi (isim + email)
     users = []
     async for u in db.users.find({ "_id": { "$in": r["user_ids"] } }):
@@ -552,8 +589,8 @@ async def representative_detail(name: str):
         })
 
     return {
-        "representative": r["_id"]["representative"],
-        "region": r["_id"]["region"],
+        "representative": r["_id"],
+        "league": league,
         "pharmacies": sorted([p for p in r.get("pharmacies", []) if p]),
         "users": users,
         "total_items": int(r.get("total_items", 0)),
@@ -715,13 +752,29 @@ async def admin_user_detail(user_id: str):
                     "is_finished_individually": last_participation.get("finished_at") is not None
                 }
 
+    # 🔥 LIG / MUMESSIL FALLBACK (eczaneden çek)
+    profile = u.get("profile", {}) or {}
+    league = profile.get("league")
+    representative = profile.get("representative")
+    if isinstance(representative, dict):
+        representative = representative.get("name")
+
+    # Profilde yoksa, eczane koleksiyonundan çek
+    if (not league or not representative) and profile.get("pharmacy_id"):
+        pharmacy_doc = await db.pharmacies.find_one({"_id": profile["pharmacy_id"]})
+        if pharmacy_doc:
+            if not league:
+                league = pharmacy_doc.get("league")
+            if not representative:
+                representative = pharmacy_doc.get("representative")
+
     return {
         "id": str(u["_id"]),
         "name": u.get("full_name"),
         "email": u.get("email"),
-        "pharmacy": u.get("profile", {}).get("pharmacy_name"),
-        "region": u.get("profile", {}).get("region"),
-        "representative": u.get("profile", {}).get("representative"),
+        "pharmacy": profile.get("pharmacy_name"),
+        "league": league,
+        "representative": representative,
         
         # Lifetime Stats
         "total_reports": u.get("total_reports", 0),
