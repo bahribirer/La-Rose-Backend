@@ -129,6 +129,7 @@ async def list_users():
     "pharmacy_name": "$profile.pharmacy_name",
     "district": "$profile.district",
     "region": "$profile.region",
+    "league": "$profile.league",
 
     # 🔥 REPRESENTATIVE NORMALIZE
     "representative": {
@@ -175,6 +176,7 @@ async def list_users():
                 "pharmacy_name": 1,
                 "district": 1,
                 "region": 1,
+                "league": 1,
                 "representative": 1,
 
                 "total_reports": 1,
@@ -205,6 +207,7 @@ async def list_users():
             "pharmacy_name": u.get("pharmacy_name"),
             "district": u.get("district"),
             "region": u.get("region"),
+            "league": u.get("league"),
             "representative": u.get("representative"),
 
             "total_reports": int(u.get("total_reports", 0)),
@@ -403,6 +406,7 @@ async def representatives_performance(
             "$group": {
                 "_id": {
                     "representative": "$rep_name",
+                    "league": "$league",
                     "region": "$region"
                 },
                 "pharmacy_ids": { "$addToSet": "$pharmacy_id" },
@@ -452,6 +456,7 @@ async def representatives_performance(
     async for r in cursor:
         results.append({
             "representative": r["_id"]["representative"],
+            "league": r["_id"].get("league"),
             "region": r["_id"]["region"],
             "pharmacy_count": int(r.get("pharmacy_count", 0)),
             "user_count": int(r.get("user_count", 0)),
