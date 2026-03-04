@@ -91,3 +91,43 @@ async def get_pharmacies_list(league: str = None, representative: str = None):
             "pharmacist": doc.get("pharmacist"),
         })
     return results
+
+async def create_pharmacy(data: dict):
+    # Normalize name if present
+    if "pharmacy_name" in data:
+        data["normalized_name"] = normalize_text(data["pharmacy_name"])
+    
+    result = await db.pharmacies.insert_one(data)
+    data["id"] = str(result.inserted_id)
+    return data
+
+async def update_pharmacy(pharmacy_id: str, data: dict):
+    # Normalize name if present
+    if "pharmacy_name" in data:
+        data["normalized_name"] = normalize_text(data["pharmacy_name"])
+    
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(pharmacy_id)
+    except:
+        return None
+        
+    result = await db.pharmacies.update_one(
+        {"_id": obj_id},
+        {"$set": data}
+    )
+    
+    if result.matched_count == 0:
+        return None
+        
+    return await db.pharmacies.find_one({"_id": obj_id})
+
+async def delete_pharmacy(pharmacy_id: str):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(pharmacy_id)
+    except:
+        return False
+        
+    result = await db.pharmacies.delete_one({"_id": obj_id})
+    return result.deleted_count > 0

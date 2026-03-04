@@ -14,8 +14,14 @@ from app.admin.service import (
     get_top_products
 ) 
 from app.admin.schemas import AdminOverviewResponse
-from app.admin.pharmacy_service import process_pharmacy_excel, get_pharmacies_list
-from fastapi import File, UploadFile
+from app.admin.pharmacy_service import (
+    process_pharmacy_excel, 
+    get_pharmacies_list,
+    create_pharmacy,
+    update_pharmacy,
+    delete_pharmacy
+)
+from fastapi import File, UploadFile, Body
 
 router = APIRouter(
     prefix="/admin",
@@ -1333,6 +1339,24 @@ async def list_pharmacies(
     representative: Optional[str] = Query(None)
 ):
     return await get_pharmacies_list(league, representative)
+
+@router.post("/pharmacies", dependencies=[Depends(admin_required)])
+async def add_pharmacy(data: dict = Body(...)):
+    return await create_pharmacy(data)
+
+@router.put("/pharmacies/{pharmacy_id}", dependencies=[Depends(admin_required)])
+async def edit_pharmacy(pharmacy_id: str, data: dict = Body(...)):
+    result = await update_pharmacy(pharmacy_id, data)
+    if not result:
+        return {"error": "Eczane bulunamadı."}
+    return result
+
+@router.delete("/pharmacies/{pharmacy_id}", dependencies=[Depends(admin_required)])
+async def remove_pharmacy(pharmacy_id: str):
+    success = await delete_pharmacy(pharmacy_id)
+    if not success:
+        return {"error": "Eczane silinemedi."}
+    return {"message": "Eczane başarıyla silindi."}
 
 @router.post("/pharmacies/upload", dependencies=[Depends(admin_required)])
 async def upload_pharmacies(file: UploadFile = File(...)):
