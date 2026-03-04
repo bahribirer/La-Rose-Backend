@@ -14,6 +14,8 @@ from app.admin.service import (
     get_top_products
 ) 
 from app.admin.schemas import AdminOverviewResponse
+from app.admin.pharmacy_service import process_pharmacy_excel, get_pharmacies_list
+from fastapi import File, UploadFile
 
 router = APIRouter(
     prefix="/admin",
@@ -1325,3 +1327,15 @@ async def admin_field_visits_export(
 
 
 
+@router.get("/pharmacies", dependencies=[Depends(admin_required)])
+async def list_pharmacies(
+    league: Optional[str] = Query(None),
+    representative: Optional[str] = Query(None)
+):
+    return await get_pharmacies_list(league, representative)
+
+@router.post("/pharmacies/upload", dependencies=[Depends(admin_required)])
+async def upload_pharmacies(file: UploadFile = File(...)):
+    content = await file.read()
+    count = await process_pharmacy_excel(content)
+    return {"message": f"{count} eczane başarıyla güncellendi.", "count": count}
