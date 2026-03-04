@@ -393,54 +393,50 @@ async def debug_report_item(report_id: str):
 async def representatives_performance(
     league: Optional[str] = Query(default=None),
 ):
-    pipeline = []
+    # 🔥 ECZANE KOLEKSİYONUNDAN BAŞLA (kaynak-doğruluk)
+    pipeline = [
+        {"$match": {"representative": {"$ne": None}}},
+    ]
 
-    # 🔥 LİG FİLTRESİ (OPSİYONEL)
     if league:
-        pipeline.append({
-            "$match": { "league": league }
-        })
+        pipeline.append({"$match": {"league": league}})
 
     pipeline += [
-        # sadece eşleşmiş profiller
-        {
-            "$match": {
-                "representative": { "$ne": None }
-            }
-        },
-
-        # 🔹 normalize (object gelirse stringe çevir)
-        {
-            "$addFields": {
-                "rep_name": {
-                    "$cond": {
-                        "if": { "$eq": [{ "$type": "$representative" }, "object"] },
-                        "then": "$representative.name",
-                        "else": "$representative"
-                    }
-                }
-            }
-        },
-
-        # 🔹 group by representative
+        # 🔹 mümessile göre grupla → ligler + eczane id'leri
         {
             "$group": {
-                "_id": "$rep_name",
-                "leagues": { "$addToSet": "$league" },
-                "pharmacy_ids": { "$addToSet": "$pharmacy_id" },
-                "user_ids": { "$addToSet": "$user_id" }
+                "_id": "$representative",
+                "leagues": {"$addToSet": "$league"},
+                "pharmacy_ids": {"$addToSet": "$_id"},
             }
         },
 
-        # 🔹 counts
+        # 🔹 eczane sayısı
         {
             "$addFields": {
-                "pharmacy_count": { "$size": "$pharmacy_ids" },
-                "user_count": { "$size": "$user_ids" }
+                "pharmacy_count": {"$size": "$pharmacy_ids"}
             }
         },
 
-        # 🔹 join sales_reports
+        # 🔹 user_profiles join (pharmacy_id üzerinden)
+        {
+            "$lookup": {
+                "from": "user_profiles",
+                "localField": "pharmacy_ids",
+                "foreignField": "pharmacy_id",
+                "as": "profiles"
+            }
+        },
+
+        # 🔹 user_id'leri topla
+        {
+            "$addFields": {
+                "user_ids": "$profiles.user_id",
+                "user_count": {"$size": "$profiles"}
+            }
+        },
+
+        # 🔹 sales_reports join
         {
             "$lookup": {
                 "from": "sales_reports",
@@ -450,30 +446,28 @@ async def representatives_performance(
             }
         },
 
-        # 🔹 aggregates
+        # 🔹 satış metrikleri
         {
             "$addFields": {
-                "total_items": { "$sum": "$reports.summary.total_items" },
-                "total_profit": { "$sum": "$reports.summary.total_profit" },
-                "total_cost": { "$sum": "$reports.summary.total_cost" }
+                "total_items": {"$sum": "$reports.summary.total_items"},
+                "total_profit": {"$sum": "$reports.summary.total_profit"},
+                "total_cost": {"$sum": "$reports.summary.total_cost"}
             }
         },
-        { 
-            "$addFields": { 
-                "total_revenue": { "$add": ["$total_profit", "$total_cost"] } 
-            } 
+        {
+            "$addFields": {
+                "total_revenue": {"$add": ["$total_profit", "$total_cost"]}
+            }
         },
 
-        # 🔹 sıralama
-        { "$sort": { "total_revenue": -1 } }
+        {"$sort": {"total_revenue": -1}}
     ]
 
-    cursor = db.user_profiles.aggregate(pipeline)
+    cursor = db.pharmacies.aggregate(pipeline)
 
     db_results = {}
     async for r in cursor:
-        # Ligleri filtrele (None değerleri çıkar)
-        leagues = [l for l in r.get("leagues", []) if l]
+        leagues = sorted([l for l in r.get("leagues", []) if l])
         db_results[r["_id"]] = {
             "representative": r["_id"],
             "leagues": leagues,
@@ -484,23 +478,15 @@ async def representatives_performance(
             "total_revenue": float(r.get("total_revenue", 0)),
         }
 
-    # 🔥 TÜM MÜMESSİLLERİN GÖRÜNMESİNİ SAĞLA (0 olsa bile)
-    # Lig bilgisi SABİT haritadan alınır
+    # 🔥 TÜM MÜMESSİLLERİN GÖRÜNMESİNİ SAĞLA
     final_results = []
     for rep_name in ALL_REPRESENTATIVES:
         if rep_name in db_results:
-            item = db_results[rep_name]
-            # Eğer aggregation'dan lig gelmemişse, eczanelerden çek
-            if not item["leagues"]:
-                pharmacy_leagues = await db.pharmacies.distinct("league", {"representative": rep_name})
-                item["leagues"] = [l for l in pharmacy_leagues if l]
-            final_results.append(item)
+            final_results.append(db_results[rep_name])
         else:
-            # Eczanelerden ligleri çek
-            pharmacy_leagues = await db.pharmacies.distinct("league", {"representative": rep_name})
             final_results.append({
                 "representative": rep_name,
-                "leagues": [l for l in pharmacy_leagues if l],
+                "leagues": [],
                 "pharmacy_count": 0,
                 "user_count": 0,
                 "total_items": 0,
@@ -517,35 +503,38 @@ from urllib.parse import unquote
 async def representative_detail(name: str):
     rep_name = unquote(name)
 
+    # 🔥 ECZANE KOLEKSİYONUNDAN BAŞLA
     pipeline = [
-        # ilgili mümessil
-        { "$match": { "representative": { "$ne": None } } },
+        {"$match": {"representative": rep_name}},
 
-        # normalize (object → string)
-        {
-            "$addFields": {
-                "rep_name": {
-                    "$cond": {
-                        "if": { "$eq": [{ "$type": "$representative" }, "object"] },
-                        "then": "$representative.name",
-                        "else": "$representative"
-                    }
-                }
-            }
-        },
-        { "$match": { "rep_name": rep_name } },
-
-        # kullanıcı & eczane setleri
+        # mümessile göre grupla
         {
             "$group": {
-                "_id": "$rep_name",
-                "league": { "$first": "$league" },
-                "user_ids": { "$addToSet": "$user_id" },
-                "pharmacies": { "$addToSet": "$pharmacy_name" }
+                "_id": "$representative",
+                "leagues": {"$addToSet": "$league"},
+                "pharmacy_ids": {"$addToSet": "$_id"},
+                "pharmacies": {"$addToSet": "$pharmacy_name"},
             }
         },
 
-        # sales join
+        # user_profiles join
+        {
+            "$lookup": {
+                "from": "user_profiles",
+                "localField": "pharmacy_ids",
+                "foreignField": "pharmacy_id",
+                "as": "profiles"
+            }
+        },
+
+        # user_id'leri topla
+        {
+            "$addFields": {
+                "user_ids": "$profiles.user_id",
+            }
+        },
+
+        # sales_reports join
         {
             "$lookup": {
                 "from": "sales_reports",
@@ -558,28 +547,25 @@ async def representative_detail(name: str):
         # totals
         {
             "$addFields": {
-                "total_items": { "$sum": "$reports.summary.total_items" },
-                "total_profit": { "$sum": "$reports.summary.total_profit" },
-                "total_cost": { "$sum": "$reports.summary.total_cost" }
+                "total_items": {"$sum": "$reports.summary.total_items"},
+                "total_profit": {"$sum": "$reports.summary.total_profit"},
+                "total_cost": {"$sum": "$reports.summary.total_cost"}
             }
         }
     ]
 
-    cursor = db.user_profiles.aggregate(pipeline)
+    cursor = db.pharmacies.aggregate(pipeline)
     doc = await cursor.to_list(length=1)
 
     if not doc:
         raise HTTPException(404, "Mümessil bulunamadı")
 
     r = doc[0]
-
-    # Ligleri eczanelerden çek
-    pharmacy_leagues = await db.pharmacies.distinct("league", {"representative": rep_name})
-    leagues = [l for l in pharmacy_leagues if l]
+    leagues = sorted([l for l in r.get("leagues", []) if l])
 
     # kullanıcı listesi (isim + email)
     users = []
-    async for u in db.users.find({ "_id": { "$in": r["user_ids"] } }):
+    async for u in db.users.find({"_id": {"$in": r.get("user_ids", [])}}):
         users.append({
             "id": str(u["_id"]),
             "name": u.get("full_name") or u.get("email"),
