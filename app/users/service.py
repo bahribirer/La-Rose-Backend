@@ -28,6 +28,7 @@ def serialize_profile(user: dict, profile: Optional[dict]):
         "id": str(user["_id"]),
         "email": user.get("email"),
         "full_name": user.get("full_name"),
+        "role": user.get("role", "user"),
 
         "phone_number": profile.get("phone_number") if profile else None,
 
@@ -59,6 +60,7 @@ def serialize_profile(user: dict, profile: Optional[dict]):
         "onboarding_completed": bool(user.get("onboarding_completed")),
         "city": profile.get("city") if profile else None,
     }
+
 
 
 
