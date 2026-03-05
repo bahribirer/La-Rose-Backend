@@ -1,12 +1,26 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    APP_NAME: str
-    MONGO_URI: str
-    DB_NAME: str
+    APP_NAME: str = "La Rosee API"
+    
+    # 🗄️ MongoDB Configuration
+    MONGO_HOST: str = "localhost"
+    MONGO_PORT: int = 27017
+    MONGO_USER: str | None = None
+    MONGO_PASS: str | None = None
+    DB_NAME: str = "rosap_db"
+    
+    @property
+    def MONGO_URI(self) -> str:
+        if self.MONGO_USER and self.MONGO_PASS:
+            # Docker/Production with Auth
+            return f"mongodb://{self.MONGO_USER}:{self.MONGO_PASS}@{self.MONGO_HOST}:{self.MONGO_PORT}/{self.DB_NAME}?authSource=admin"
+        # Local without Auth
+        return f"mongodb://{self.MONGO_HOST}:{self.MONGO_PORT}/{self.DB_NAME}"
+
     JWT_SECRET: str
-    JWT_ALGORITHM: str
-    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     # 🔐 Secrets
     OPENAI_API_KEY: str

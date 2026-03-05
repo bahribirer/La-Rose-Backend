@@ -135,6 +135,9 @@ jobs:
               -e FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json \
               -e GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json \
               -e DOCAI_CREDENTIALS_PATH=/app/app/creds/google.json \
+              -e MONGO_HOST=mongodb \
+              -e MONGO_USER=${{ secrets.MONGO_USER }} \
+              -e MONGO_PASS=${{ secrets.MONGO_PASS }} \
               -e MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_USER }} \
               -e MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_PASS }} \
               -v $(pwd)/uploads:/app/uploads \
