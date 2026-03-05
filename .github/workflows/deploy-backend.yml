@@ -98,16 +98,14 @@ jobs:
           script: |
             cd ${{ secrets.EC2_PROJECT_DIR }}
 
-            echo "🛑 STEP 1: Killing EVERYTHING on port 8000..."
-            # 1a: Docker containerları durdur ve sil
+            echo "🛑 STEP 1: Nuclear cleanup - restart Docker to free ALL ports..."
             docker stop rosap-backend 2>/dev/null || true
             docker rm -f rosap-backend 2>/dev/null || true
             docker rm -f $(docker ps -aq) 2>/dev/null || true
-            # 1b: Bare-metal uvicorn varsa sudo ile öldür
-            sudo kill -9 $(sudo ss -tlnp | grep ':8000 ' | sed 's/.*pid=//;s/,.*//') 2>/dev/null || true
-            # 1c: Bekle ki port tamamen boşalsın
-            sleep 3
-            echo "✅ Port 8000 temizlendi"
+            # Nuclear: Docker servisini yeniden başlatarak zombie proxy'leri ve port binding'leri temizle
+            sudo systemctl restart docker
+            sleep 5
+            echo "✅ Docker restarted, all ports freed"
 
             echo "🧹 STEP 2: Docker cache temizliği..."
             docker system prune -af || true
