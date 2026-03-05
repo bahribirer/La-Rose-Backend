@@ -98,7 +98,10 @@ jobs:
           script: |
             cd ${{ secrets.EC2_PROJECT_DIR }}
 
-            echo "🛑 STEP 1: Nuclear cleanup - restart Docker to free ALL ports..."
+            echo "🛑 STEP 1: Nuclear cleanup - kill bare-metal uvicorn AND restart Docker..."
+            # ÖNCE bare-metal uvicorn'u öldür (Docker dışında çalışan, portu tutan süreç)
+            pkill -9 -f uvicorn 2>/dev/null || true
+            sleep 1
             docker stop rosap-backend 2>/dev/null || true
             docker rm -f rosap-backend 2>/dev/null || true
             docker rm -f $(docker ps -aq) 2>/dev/null || true
