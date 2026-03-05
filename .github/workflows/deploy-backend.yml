@@ -113,7 +113,14 @@ jobs:
               # Port 8000'i kullanan HERHANGİ bir süreci zorla öldür (sed ile PID çıkar)
               kill -9 $(ss -tlnp | awk '/:8000 /{print}' | sed 's/.*pid=//;s/,.*//') 2>/dev/null || true
               sleep 3
-              docker run -d --name rosap-backend -p 8000:8000 --env-file .env -v $(pwd)/uploads:/app/uploads -v $(pwd)/app/creds:/app/app/creds:ro --restart unless-stopped rosap-backend
+              docker run -d --name rosap-backend -p 8000:8000 \
+                --env-file .env \
+                -e FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json \
+                -e GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json \
+                -e DOCAI_CREDENTIALS_PATH=/app/app/creds/google.json \
+                -v $(pwd)/uploads:/app/uploads \
+                -v $(pwd)/app/creds:/app/app/creds:ro \
+                --restart unless-stopped rosap-backend
             else
               # Bare-metal: uvicorn restart
               pkill -f "uvicorn app.main:app" || true
@@ -131,14 +138,17 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            cd ${{ secrets.EC2_PROJECT_DIR }}
             echo "📊 Container status:"
             docker ps -a --filter name=rosap-backend --format "ID={{.ID}} Status={{.Status}} Ports={{.Ports}}"
             echo ""
             echo "📋 Container logs (last 30 lines):"
             docker logs rosap-backend --tail 30 2>&1 || echo "(no container found)"
             echo ""
-            echo "📁 .env file check:"
+            echo "📁 File checks:"
             ls -la .env 2>/dev/null && echo ".env exists" || echo ".env NOT FOUND!"
+            ls -la app/creds/firebase.json 2>/dev/null && echo "firebase.json exists" || echo "firebase.json NOT FOUND!"
+            ls -la app/creds/google.json 2>/dev/null && echo "google.json exists" || echo "google.json NOT FOUND!"
             echo ""
             HEALTH=$(curl -sf http://localhost:8000/health 2>/dev/null)
             if [ $? -eq 0 ]; then
