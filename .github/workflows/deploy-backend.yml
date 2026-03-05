@@ -102,8 +102,8 @@ jobs:
             echo "🔄 Restarting backend..."
             # Eğer Docker kullanılıyorsa:
             if [ -f docker-compose.rosap.yml ]; then
-              docker compose -f docker-compose.rosap.yml build backend --no-cache
-              docker compose -f docker-compose.rosap.yml up -d --no-deps backend
+              docker-compose -f docker-compose.rosap.yml build backend --no-cache
+              docker-compose -f docker-compose.rosap.yml up -d --no-deps backend
             else
               # Bare-metal: uvicorn restart
               pkill -f "uvicorn app.main:app" || true
