@@ -1,36 +1,140 @@
-name: 🚀 Deploy Backend
+name: 🚀 Backend CI/CD Pipeline
 
 on:
   push:
     branches: [main]
-    paths:
-      - 'backend/**'
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
 
 jobs:
-  deploy:
+  # ============================================================
+  # 1️⃣ LINT & TEST
+  # ============================================================
+  lint:
+    name: 🔍 Lint & Syntax Check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Syntax check
+        run: python -m py_compile app/main.py
+
+      - name: Check imports
+        run: |
+          python -c "
+          import importlib
+          modules = [
+            'app.main',
+            'app.auth.router',
+            'app.users.router',
+            'app.admin.router',
+            'app.competitions.router',
+            'app.sales.router',
+            'app.pharmacies.router',
+          ]
+          for m in modules:
+            try:
+              importlib.import_module(m)
+              print(f'✅ {m}')
+            except Exception as e:
+              print(f'❌ {m}: {e}')
+              exit(1)
+          "
+
+  # ============================================================
+  # 2️⃣ DEPLOY (sadece main branch push'larında)
+  # ============================================================
+  deploy:
+    name: 🚀 Deploy to Production
+    needs: lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            echo "📦 Pulling latest code..."
+            cd ${{ secrets.EC2_PROJECT_DIR }}
+            git pull origin main
+
+            echo "🔄 Restarting backend..."
+            # Eğer Docker kullanılıyorsa:
+            if [ -f docker-compose.rosap.yml ]; then
+              docker compose -f docker-compose.rosap.yml build backend --no-cache
+              docker compose -f docker-compose.rosap.yml up -d --no-deps backend
+            else
+              # Bare-metal: uvicorn restart
+              pkill -f "uvicorn app.main:app" || true
+              sleep 2
+              nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 > /tmp/uvicorn.log 2>&1 &
+            fi
+
+            echo "⏳ Waiting for startup..."
+            sleep 8
+
+      - name: Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ec2-user/la-rosee
-            git pull origin main
-            
-            # Docker rebuild
-            docker compose -f docker-compose.rosap.yml build backend
-            docker compose -f docker-compose.rosap.yml up -d --no-deps backend
-            
-            # Health check
-            sleep 5
-            curl -sf http://localhost:8000/health && echo "✅ Deploy OK" || echo "❌ Deploy FAILED"
+            HEALTH=$(curl -sf http://localhost:8000/health 2>/dev/null)
+            if [ $? -eq 0 ]; then
+              echo "✅ Health check passed!"
+              echo "$HEALTH"
+            else
+              echo "❌ Health check FAILED!"
+              echo "📋 Last logs:"
+              tail -20 /tmp/uvicorn.log 2>/dev/null || docker logs rosap-backend --tail 20 2>/dev/null
+              exit 1
+            fi
 
-      - name: Notify on failure
-        if: failure()
-        run: echo "❌ Deploy failed! Check GitHub Actions logs."
+  # ============================================================
+  # 3️⃣ POST-DEPLOY NOTIFY
+  # ============================================================
+  notify:
+    name: 📢 Notify
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Success
+        if: needs.deploy.result == 'success'
+        run: |
+          echo "✅ Deploy başarılı!"
+          echo "🕐 $(date)"
+          echo "📝 Commit: ${{ github.sha }}"
+
+      - name: Failure
+        if: needs.deploy.result == 'failure'
+        run: |
+          echo "❌ Deploy başarısız!"
+          echo "🔗 ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          exit 1
