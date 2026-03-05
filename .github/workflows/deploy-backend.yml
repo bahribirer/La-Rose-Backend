@@ -122,7 +122,7 @@ jobs:
             fi
 
             echo "⏳ Waiting for startup..."
-            sleep 8
+            sleep 15
 
       - name: Health Check
         uses: appleboy/ssh-action@v1.0.3
@@ -131,14 +131,21 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            echo "📊 Container status:"
+            docker ps -a --filter name=rosap-backend --format "ID={{.ID}} Status={{.Status}} Ports={{.Ports}}"
+            echo ""
+            echo "📋 Container logs (last 30 lines):"
+            docker logs rosap-backend --tail 30 2>&1 || echo "(no container found)"
+            echo ""
+            echo "📁 .env file check:"
+            ls -la .env 2>/dev/null && echo ".env exists" || echo ".env NOT FOUND!"
+            echo ""
             HEALTH=$(curl -sf http://localhost:8000/health 2>/dev/null)
             if [ $? -eq 0 ]; then
               echo "✅ Health check passed!"
               echo "$HEALTH"
             else
               echo "❌ Health check FAILED!"
-              echo "📋 Last logs:"
-              tail -20 /tmp/uvicorn.log 2>/dev/null || docker logs rosap-backend --tail 20 2>/dev/null
               exit 1
             fi
 
