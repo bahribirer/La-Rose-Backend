@@ -107,6 +107,9 @@ jobs:
             # Eğer Docker kullanılıyorsa:
             if [ -f docker-compose.rosap.yml ]; then
               docker build -t rosap-backend -f Dockerfile .
+              # Temizlik: Port 8000'i işgal eden eski servisleri ve bare-metal uvicorn'u öldür
+              pkill -f "uvicorn" || true
+              docker rm -f $(docker ps -q --filter "publish=8000") || true
               docker stop rosap-backend || true
               docker rm rosap-backend || true
               docker run -d --name rosap-backend -p 8000:8000 --env-file .env -v $(pwd)/uploads:/app/uploads -v $(pwd)/app/creds:/app/app/creds:ro --restart unless-stopped rosap-backend
