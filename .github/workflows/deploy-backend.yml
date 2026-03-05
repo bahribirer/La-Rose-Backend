@@ -142,9 +142,13 @@ jobs:
             GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
             EOF
 
-            # Docker Compose ile backend'i ayağa kaldır
-            # Bu komut backend'i build eder, ağa bağlar ve restart eder
-            docker compose -f docker-compose.rosap.yml up -d --build backend
+            # Docker Build (Buildx sürüm hatasını önlemek için ayrı yapıyoruz)
+            echo "🔨 STEP 5: Building Docker image manually..."
+            docker build -t rosap-backend -f Dockerfile .
+
+            # Docker Compose ile backend'i ayağa kaldır (Build gerektirmez, mevcut imajı kullanır)
+            echo "🚀 STEP 6: Starting with Compose..."
+            docker compose -f docker-compose.rosap.yml up -d --no-build backend
 
             echo "⏳ Waiting for startup..."
             sleep 15

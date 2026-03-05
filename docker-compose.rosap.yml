@@ -6,6 +6,7 @@ name: la-rosee
 services:
   # 🔥 BACKEND API
   backend:
+    image: rosap-backend
     build:
       context: .
       dockerfile: Dockerfile
