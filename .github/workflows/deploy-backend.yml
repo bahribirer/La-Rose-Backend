@@ -102,6 +102,8 @@ jobs:
             echo "🔄 Restarting backend..."
             # Eğer Docker kullanılıyorsa:
             if [ -f docker-compose.rosap.yml ]; then
+              echo "🧹 Cleaning up old Docker images to free space..."
+              docker system prune -af --volumes || true
               docker build -t rosap-backend -f Dockerfile .
               docker stop rosap-backend || true
               docker rm rosap-backend || true
