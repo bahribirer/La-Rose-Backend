@@ -17,3 +17,5 @@ openpyxl
 pandas
 pydantic-settings
 python-multipart
+twilio
+requests
