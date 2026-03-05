@@ -1,0 +1,36 @@
+name: 🚀 Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ec2-user/la-rosee
+            git pull origin main
+            
+            # Docker rebuild
+            docker compose -f docker-compose.rosap.yml build backend
+            docker compose -f docker-compose.rosap.yml up -d --no-deps backend
+            
+            # Health check
+            sleep 5
+            curl -sf http://localhost:8000/health && echo "✅ Deploy OK" || echo "❌ Deploy FAILED"
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "❌ Deploy failed! Check GitHub Actions logs."

@@ -1,0 +1,77 @@
+# ==================================
+# La Rosee - Docker Compose
+# ==================================
+name: la-rosee
+
+services:
+  # 🔥 BACKEND API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rosap-backend
+    env_file: ./.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./app/creds:/app/app/creds:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # 🗄️ MONGODB
+  mongodb:
+    image: mongo:7
+    container_name: rosap-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-rosap_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-changeme}
+    ports:
+      - "127.0.0.1:27017:27017"  # sadece localhost'tan erişim
+    volumes:
+      - mongo_data:/data/db
+      - mongo_backup:/backup
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # 🌐 NGINX (Reverse Proxy + SSL)
+  nginx:
+    image: nginx:alpine
+    container_name: rosap-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/rosap.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # 🔐 CERTBOT (Let's Encrypt SSL)
+  certbot:
+    image: certbot/certbot
+    container_name: rosap-certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+volumes:
+  mongo_data:
+  mongo_backup:
