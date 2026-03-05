@@ -108,11 +108,11 @@ jobs:
             # Eğer Docker kullanılıyorsa:
             if [ -f docker-compose.rosap.yml ]; then
               docker build -t rosap-backend -f Dockerfile .
-              # Temizlik: Önceki tüm containerları ve port 8000'i işgal eden süreci öldür
+              # Temizlik: Tüm containerları kaldır
               docker rm -f $(docker ps -aq) 2>/dev/null || true
-              # Bare-metal uvicorn varsa ss ile bul ve öldür
-              for pid in $(ss -tlnp 2>/dev/null | grep ':8000 ' | grep -oP 'pid=\K[0-9]+' || true); do kill "$pid" 2>/dev/null; done || true
-              sleep 2
+              # Port 8000'i kullanan HERHANGİ bir süreci zorla öldür (sed ile PID çıkar)
+              kill -9 $(ss -tlnp | awk '/:8000 /{print}' | sed 's/.*pid=//;s/,.*//') 2>/dev/null || true
+              sleep 3
               docker run -d --name rosap-backend -p 8000:8000 --env-file .env -v $(pwd)/uploads:/app/uploads -v $(pwd)/app/creds:/app/app/creds:ro --restart unless-stopped rosap-backend
             else
               # Bare-metal: uvicorn restart
