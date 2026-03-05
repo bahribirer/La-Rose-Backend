@@ -124,7 +124,7 @@ jobs:
               -e GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json \
               -e DOCAI_CREDENTIALS_PATH=/app/app/creds/google.json \
               -v $(pwd)/uploads:/app/uploads \
-              -v $(pwd)/app/creds:/app/app/creds:ro \
+              -v /home/ec2-user/creds:/app/app/creds:ro \
               --restart unless-stopped rosap-backend
 
             echo "⏳ Waiting for startup..."
@@ -148,10 +148,10 @@ jobs:
             echo "📋 Container logs (last 30 lines):"
             docker logs rosap-backend --tail 30 2>&1 || echo "(no container found)"
             echo ""
-            echo "📁 File checks:"
+            echo "📁 File checks (looking in /home/ec2-user/creds):"
             ls -la .env 2>/dev/null && echo ".env exists" || echo ".env NOT FOUND!"
-            ls -la app/creds/firebase.json 2>/dev/null && echo "firebase.json exists" || echo "firebase.json NOT FOUND!"
-            ls -la app/creds/google.json 2>/dev/null && echo "google.json exists" || echo "google.json NOT FOUND!"
+            ls -la /home/ec2-user/creds/firebase.json 2>/dev/null && echo "firebase.json exists" || echo "firebase.json NOT FOUND!"
+            ls -la /home/ec2-user/creds/google.json 2>/dev/null && echo "google.json exists" || echo "google.json NOT FOUND!"
             echo ""
             HEALTH=$(curl -sf http://localhost:8001/health 2>/dev/null)
             if [ $? -eq 0 ]; then
