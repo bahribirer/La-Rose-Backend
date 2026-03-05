@@ -15,3 +15,5 @@ groq
 firebase-admin>=6.5.0
 openpyxl
 pandas
+pydantic-settings
+python-multipart
