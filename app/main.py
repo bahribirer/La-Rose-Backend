@@ -12,23 +12,59 @@ from app.competitions.router import router as competitions_router
 from app.pharmacies.router import router as pharmacies_router
 from app.notifications.router import router as notifications_router
 from app.field_visits.router import router as field_visits_router
+from datetime import datetime
+import os
 
+# 🔥 Startup tracking
+_STARTED_AT = datetime.utcnow()
 
+app = FastAPI(
+    title="La Rosee API",
+    version="1.0.0",
+    docs_url="/docs" if os.getenv("DEBUG", "false") == "true" else None,
+    redoc_url=None,
+)
 
-
-app = FastAPI()
+# 🔐 CORS — production'da sıkılaştır
+ALLOWED_ORIGINS = [
+    "https://rosa-admin.vercel.app",
+    "https://rose-admin.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "*"
-         # 🔥 SENİN PORT
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+# ========================
+# 🏥 HEALTH CHECK
+# ========================
+from app.core.database import db
+
+@app.get("/health")
+async def health_check():
+    # MongoDB bağlantı kontrolü
+    mongo_ok = False
+    try:
+        await db.command("ping")
+        mongo_ok = True
+    except Exception:
+        pass
+
+    uptime = (datetime.utcnow() - _STARTED_AT).total_seconds()
+
+    return {
+        "status": "ok" if mongo_ok else "degraded",
+        "mongo": "connected" if mongo_ok else "disconnected",
+        "uptime_seconds": round(uptime),
+        "version": "1.0.0",
+    }
 
 
 # 🔥 ROUTER'LARI EKLE
