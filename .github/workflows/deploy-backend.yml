@@ -36,6 +36,9 @@ jobs:
       - name: Syntax check
         run: python -m py_compile app/main.py
 
+      - name: Create mock firebase creds
+        run: echo '{"type":"service_account","project_id":"mock"}' > mock-path.json
+
       - name: Check imports
         env:
           FIREBASE_CREDENTIALS_PATH: "mock-path.json"
