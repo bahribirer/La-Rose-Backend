@@ -144,7 +144,7 @@ jobs:
 
             # Docker Compose ile backend'i ayağa kaldır
             # Bu komut backend'i build eder, ağa bağlar ve restart eder
-            docker-compose -f docker-compose.rosap.yml up -d --build backend
+            docker compose -f docker-compose.rosap.yml up -d --build backend
 
             echo "⏳ Waiting for startup..."
             sleep 15
