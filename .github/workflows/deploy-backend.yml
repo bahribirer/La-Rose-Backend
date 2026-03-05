@@ -107,9 +107,11 @@ jobs:
               sudo systemctl stop "$SERVICE_NAME" || true
             fi
 
-            # 1b: Stop/Remove container by name - Filtered query for maximum accuracy
-            echo "🧹 Removing container rosap-backend..."
-            docker ps -aq --filter name=rosap-backend | xargs -r docker rm -f || true
+            # 1b: Stop/Remove conflicting containers
+            echo "🧹 Cleaning up existing containers (backend, mongo, nginx)..."
+            docker rm -f rosap-backend rosap-mongo rosap-nginx 2>/dev/null || true
+            # Project bazlı temizlik (Compose tarafını da garantiye alalım)
+            docker compose -p rosap down || true
             
             # 1c: Port 8001 check (urgical kill)
             sudo fuser -k 8001/tcp 2>/dev/null || true
