@@ -98,15 +98,14 @@ jobs:
           script: |
             cd ${{ secrets.EC2_PROJECT_DIR }}
 
-            echo "🛑 STEP 1: Surgical port cleanup (Port 8000)..."
-            # 1a: Stop and remove related container
+            echo "🛑 STEP 1: Aggressive cleanup..."
+            # 1a: Stop and remove related container by name AND any container using port 8001
             docker stop rosap-backend 2>/dev/null || true
             docker rm -f rosap-backend 2>/dev/null || true
-            # 1b: Use fuser or lsof to kill EXACTLY what is on port 8000 (surgical, won't kill SSH)
-            sudo fuser -k 8000/tcp 2>/dev/null || true
-            for pid in $(sudo lsof -t -i:8000 2>/dev/null); do sudo kill -9 $pid 2>/dev/null || true; done
+            # 1b: Port 8001'i tutan bir şey varsa onu da temizle
+            sudo fuser -k 8001/tcp 2>/dev/null || true
             sleep 2
-            echo "✅ Port 8000 is now free"
+            echo "✅ Cleanup complete"
 
             echo "🧹 STEP 2: Docker cache temizliği..."
             docker system prune -af || true
@@ -118,12 +117,8 @@ jobs:
             echo "🔨 STEP 4: Building Docker image..."
             docker build -t rosap-backend -f Dockerfile .
 
-            echo "🔍 DIAGNOSTIC: Checking what's on port 8000 after cleanup..."
-            sudo ss -tlnp | grep ':8000 ' || echo "Port 8000 seems free in ss"
-            sudo lsof -i :8000 || echo "Port 8000 seems free in lsof"
-
-            echo "🚀 STEP 5: Starting container..."
-            docker run -d --name rosap-backend -p 0.0.0.0:8000:8000 \
+            echo "🚀 STEP 5: Starting container on PORT 8001..."
+            docker run -d --name rosap-backend -p 8001:8000 \
               --env-file .env \
               -e FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json \
               -e GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json \
@@ -134,6 +129,10 @@ jobs:
 
             echo "⏳ Waiting for startup..."
             sleep 15
+
+            echo "🔍 DIAGNOSTIC: Checking port 8001..."
+            sudo ss -tlnp | grep ':8001 ' || echo "Port 8001 is NOT listening!"
+            docker ps -a | grep rosap-backend
 
       - name: Health Check
         uses: appleboy/ssh-action@v1.0.3
@@ -154,12 +153,12 @@ jobs:
             ls -la app/creds/firebase.json 2>/dev/null && echo "firebase.json exists" || echo "firebase.json NOT FOUND!"
             ls -la app/creds/google.json 2>/dev/null && echo "google.json exists" || echo "google.json NOT FOUND!"
             echo ""
-            HEALTH=$(curl -sf http://localhost:8000/health 2>/dev/null)
+            HEALTH=$(curl -sf http://localhost:8001/health 2>/dev/null)
             if [ $? -eq 0 ]; then
-              echo "✅ Health check passed!"
+              echo "✅ Health check passed on port 8001!"
               echo "$HEALTH"
             else
-              echo "❌ Health check FAILED!"
+              echo "❌ Health check FAILED on port 8001!"
               exit 1
             fi
 
