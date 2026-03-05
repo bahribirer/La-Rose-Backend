@@ -98,18 +98,15 @@ jobs:
           script: |
             cd ${{ secrets.EC2_PROJECT_DIR }}
 
-            echo "🛑 STEP 1: Nuclear cleanup - kill port 8000 processes AND restart Docker..."
-            # Sadece ve sadece port 8000'i dinleyen spesifik PID'yi bul ve öldür (pkill kullanma!)
-            PORT_PID=$(sudo lsof -t -i:8000 || true)
-            if [ ! -z "$PORT_PID" ]; then sudo kill -9 $PORT_PID 2>/dev/null || true; fi
-            sleep 1
+            echo "🛑 STEP 1: Surgical port cleanup (Port 8000)..."
+            # 1a: Stop and remove related container
             docker stop rosap-backend 2>/dev/null || true
             docker rm -f rosap-backend 2>/dev/null || true
-            docker rm -f $(docker ps -aq) 2>/dev/null || true
-            # Nuclear: Docker servisini yeniden başlatarak zombie proxy'leri ve port binding'leri temizle
-            sudo systemctl restart docker
-            sleep 5
-            echo "✅ Docker restarted, all ports freed"
+            # 1b: Use fuser or lsof to kill EXACTLY what is on port 8000 (surgical, won't kill SSH)
+            sudo fuser -k 8000/tcp 2>/dev/null || true
+            for pid in $(sudo lsof -t -i:8000 2>/dev/null); do sudo kill -9 $pid 2>/dev/null || true; done
+            sleep 2
+            echo "✅ Port 8000 is now free"
 
             echo "🧹 STEP 2: Docker cache temizliği..."
             docker system prune -af || true
@@ -122,7 +119,7 @@ jobs:
             docker build -t rosap-backend -f Dockerfile .
 
             echo "🚀 STEP 5: Starting container..."
-            docker run -d --name rosap-backend -p 8000:8000 \
+            docker run -d --name rosap-backend -p 0.0.0.0:8000:8000 \
               --env-file .env \
               -e FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json \
               -e GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json \
