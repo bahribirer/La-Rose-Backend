@@ -144,7 +144,15 @@ jobs:
             echo "⏳ Waiting for startup..."
             sleep 15
 
-            echo "🌐 STEP 6: Reloading Nginx to apply port 8001 & security changes..."
+            echo "🌐 STEP 6: SSL Certificate Check & Nginx Reload..."
+            # SSL Sertifikası yoksa almayı dene (api.rosapmobile.com)
+            if [ ! -d "/home/ec2-user/la-rosee/certbot/conf/live/api.rosapmobile.com" ]; then
+              echo "🔒 SSL certificate not found. Requesting new certificate..."
+              docker run --rm -v $(pwd)/certbot/conf:/etc/letsencrypt -v $(pwd)/certbot/www:/var/www/certbot \
+                certbot/certbot certonly --webroot -w /var/www/certbot \
+                -d api.rosapmobile.com --email bahribirer@gmail.com --agree-tos --no-eff-email --non-interactive || echo "⚠️ SSL generation failed (DNS might not be ready)"
+            fi
+
             # Nginx ayarlarını test et ve reload/restart et
             docker exec rosap-nginx nginx -t 2>/dev/null && docker restart rosap-nginx 2>/dev/null || true
             sudo nginx -t 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
