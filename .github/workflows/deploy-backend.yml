@@ -96,37 +96,38 @@ jobs:
           script_stop: true
           command_timeout: 30m
           script: |
-            echo "🧹 DEADLOCK FIX: Force-cleaning Docker cache to allow git pull..."
-            docker system prune -af --volumes || true
-            docker builder prune -af || true
-            
-            echo "📦 Pulling latest code..."
             cd ${{ secrets.EC2_PROJECT_DIR }}
+
+            echo "🛑 STEP 1: Killing EVERYTHING on port 8000..."
+            # 1a: Docker containerları durdur ve sil
+            docker stop rosap-backend 2>/dev/null || true
+            docker rm -f rosap-backend 2>/dev/null || true
+            docker rm -f $(docker ps -aq) 2>/dev/null || true
+            # 1b: Bare-metal uvicorn varsa sudo ile öldür
+            sudo kill -9 $(sudo ss -tlnp | grep ':8000 ' | sed 's/.*pid=//;s/,.*//') 2>/dev/null || true
+            # 1c: Bekle ki port tamamen boşalsın
+            sleep 3
+            echo "✅ Port 8000 temizlendi"
+
+            echo "🧹 STEP 2: Docker cache temizliği..."
+            docker system prune -af || true
+            docker builder prune -af || true
+
+            echo "📦 STEP 3: Pulling latest code..."
             git pull origin main
 
-            echo "🔄 Restarting backend..."
-            # Eğer Docker kullanılıyorsa:
-            if [ -f docker-compose.rosap.yml ]; then
-              docker build -t rosap-backend -f Dockerfile .
-              # Temizlik: Tüm containerları kaldır
-              docker rm -f $(docker ps -aq) 2>/dev/null || true
-              # Port 8000'i kullanan HERHANGİ bir süreci zorla öldür (sed ile PID çıkar)
-              kill -9 $(ss -tlnp | awk '/:8000 /{print}' | sed 's/.*pid=//;s/,.*//') 2>/dev/null || true
-              sleep 3
-              docker run -d --name rosap-backend -p 8000:8000 \
-                --env-file .env \
-                -e FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json \
-                -e GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json \
-                -e DOCAI_CREDENTIALS_PATH=/app/app/creds/google.json \
-                -v $(pwd)/uploads:/app/uploads \
-                -v $(pwd)/app/creds:/app/app/creds:ro \
-                --restart unless-stopped rosap-backend
-            else
-              # Bare-metal: uvicorn restart
-              pkill -f "uvicorn app.main:app" || true
-              sleep 2
-              nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 > /tmp/uvicorn.log 2>&1 &
-            fi
+            echo "🔨 STEP 4: Building Docker image..."
+            docker build -t rosap-backend -f Dockerfile .
+
+            echo "🚀 STEP 5: Starting container..."
+            docker run -d --name rosap-backend -p 8000:8000 \
+              --env-file .env \
+              -e FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json \
+              -e GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json \
+              -e DOCAI_CREDENTIALS_PATH=/app/app/creds/google.json \
+              -v $(pwd)/uploads:/app/uploads \
+              -v $(pwd)/app/creds:/app/app/creds:ro \
+              --restart unless-stopped rosap-backend
 
             echo "⏳ Waiting for startup..."
             sleep 15
