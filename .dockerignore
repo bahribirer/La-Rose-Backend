@@ -14,3 +14,7 @@ app/creds/
 uploads/
 creds/
 rosap-key.pem
+certbot/
+nginx/
+mongo_data/
+mongo_backup/
