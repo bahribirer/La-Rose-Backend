@@ -118,6 +118,10 @@ jobs:
             echo "🔨 STEP 4: Building Docker image..."
             docker build -t rosap-backend -f Dockerfile .
 
+            echo "🔍 DIAGNOSTIC: Checking what's on port 8000 after cleanup..."
+            sudo ss -tlnp | grep ':8000 ' || echo "Port 8000 seems free in ss"
+            sudo lsof -i :8000 || echo "Port 8000 seems free in lsof"
+
             echo "🚀 STEP 5: Starting container..."
             docker run -d --name rosap-backend -p 0.0.0.0:8000:8000 \
               --env-file .env \
