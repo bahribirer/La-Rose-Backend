@@ -37,6 +37,12 @@ jobs:
         run: python -m py_compile app/main.py
 
       - name: Check imports
+        env:
+          FIREBASE_CREDENTIALS_PATH: "mock-path.json"
+          OPENAI_API_KEY: "mock-key"
+          TWILIO_ACCOUNT_SID: "mock-sid"
+          TWILIO_AUTH_TOKEN: "mock-token"
+          JWT_SECRET: "mock-secret"
         run: |
           python -c "
           import importlib
