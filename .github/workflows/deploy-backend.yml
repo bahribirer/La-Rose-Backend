@@ -98,14 +98,23 @@ jobs:
           script: |
             cd ${{ secrets.EC2_PROJECT_DIR }}
 
-            echo "🛑 STEP 1: Aggressive cleanup..."
-            # 1a: Stop and remove related container by name AND any container using port 8001
-            docker stop rosap-backend 2>/dev/null || true
-            docker rm -f rosap-backend 2>/dev/null || true
-            # 1b: Port 8001'i tutan bir şey varsa onu da temizle
+            echo "🛑 STEP 1: Intensive name & port cleanup..."
+            # 1a: Identify and stop any systemd service that might be restarting the container
+            echo "🔍 Checking for background services..."
+            SERVICE_NAME=$(systemctl list-units --type=service --all | grep -i "rosap" | awk '{print $1}' | head -n 1)
+            if [ ! -z "$SERVICE_NAME" ]; then
+              echo "⚠️ Found background service: $SERVICE_NAME. Stopping it..."
+              sudo systemctl stop "$SERVICE_NAME" || true
+            fi
+
+            # 1b: Stop/Remove container by name - Filtered query for maximum accuracy
+            echo "🧹 Removing container rosap-backend..."
+            docker ps -aq --filter name=rosap-backend | xargs -r docker rm -f || true
+            
+            # 1c: Port 8001 check (urgical kill)
             sudo fuser -k 8001/tcp 2>/dev/null || true
-            sleep 2
-            echo "✅ Cleanup complete"
+            sleep 3
+            echo "✅ Name and Port 8001 are now free"
 
             echo "🧹 STEP 2: Docker cache temizliği..."
             docker system prune -af || true
@@ -118,6 +127,9 @@ jobs:
             docker build -t rosap-backend -f Dockerfile .
 
             echo "🚀 STEP 5: Starting container on PORT 8001..."
+            # Sanity check: Ensure name is STILL free just before run
+            docker rm -f rosap-backend 2>/dev/null || true
+            
             docker run -d --name rosap-backend -p 8001:8000 \
               --env-file .env \
               -e FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json \
