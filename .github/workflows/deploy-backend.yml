@@ -103,7 +103,9 @@ jobs:
             # Eğer Docker kullanılıyorsa:
             if [ -f docker-compose.rosap.yml ]; then
               docker build -t rosap-backend -f Dockerfile .
-              docker compose -f docker-compose.rosap.yml up -d --no-deps backend || docker-compose -f docker-compose.rosap.yml up -d --no-deps backend
+              docker stop rosap-backend || true
+              docker rm rosap-backend || true
+              docker run -d --name rosap-backend -p 8000:8000 --env-file .env -v $(pwd)/uploads:/app/uploads -v $(pwd)/app/creds:/app/app/creds:ro --restart unless-stopped rosap-backend
             else
               # Bare-metal: uvicorn restart
               pkill -f "uvicorn app.main:app" || true
