@@ -32,8 +32,9 @@ services:
     image: mongo:7
     container_name: rosap-mongo
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-rosap_admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-changeme}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-rosap_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    command: ["--auth"]
     ports:
       - "127.0.0.1:27017:27017"  # sadece localhost'tan erişim
     volumes:

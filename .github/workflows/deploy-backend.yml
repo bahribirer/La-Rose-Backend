@@ -135,6 +135,8 @@ jobs:
               -e FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json \
               -e GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json \
               -e DOCAI_CREDENTIALS_PATH=/app/app/creds/google.json \
+              -e MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_USER }} \
+              -e MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_PASS }} \
               -v $(pwd)/uploads:/app/uploads \
               -v /home/ec2-user/creds:/app/app/creds:ro \
               --restart unless-stopped rosap-backend
@@ -142,10 +144,10 @@ jobs:
             echo "⏳ Waiting for startup..."
             sleep 15
 
-            echo "🌐 STEP 6: Reloading Nginx to apply port 8001 changes..."
-            # Nginx container içindeyse onu restart et, host üzerindeyse servisi reload et
-            docker restart rosap-nginx 2>/dev/null || true
-            sudo systemctl reload nginx 2>/dev/null || true
+            echo "🌐 STEP 6: Reloading Nginx to apply port 8001 & security changes..."
+            # Nginx ayarlarını test et ve reload/restart et
+            docker exec rosap-nginx nginx -t 2>/dev/null && docker restart rosap-nginx 2>/dev/null || true
+            sudo nginx -t 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
 
             echo "🔍 DIAGNOSTIC: Checking port 8001..."
             sudo ss -tlnp | grep ':8001 ' || echo "Port 8001 is NOT listening!"

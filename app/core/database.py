@@ -4,8 +4,7 @@ import certifi
 
 client = AsyncIOMotorClient(
     settings.MONGO_URI,
-    tls=True,
-    tlsCAFile=certifi.where(),
+    # tls=True, # Production'da SSL/TLS sertifikaları ayarlandığında aktif edilebilir
     serverSelectionTimeoutMS=30000,
 )
 
