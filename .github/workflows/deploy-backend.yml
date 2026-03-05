@@ -148,7 +148,8 @@ jobs:
 
             # Docker Compose ile backend'i ayağa kaldır (Build gerektirmez, mevcut imajı kullanır)
             echo "🚀 STEP 6: Starting with Compose..."
-            docker compose -f docker-compose.rosap.yml up -d --no-build backend
+            # Proje ismini 'rosap' olarak sabitliyoruz ki la-rosee-backend ismini aramasın
+            docker compose -p rosap -f docker-compose.rosap.yml up -d --no-build backend
 
             echo "⏳ Waiting for startup..."
             sleep 15
