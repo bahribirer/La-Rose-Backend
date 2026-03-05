@@ -9,7 +9,13 @@ PROCESSOR_ID = "d9cefd8bf7d33096" # Custom Trained Processor (v2)
 
 # Explicitly load Document AI credentials (firebase.py overrides GOOGLE_APPLICATION_CREDENTIALS)
 _DOCAI_CREDS_PATH = os.environ.get("DOCAI_CREDENTIALS_PATH") or "/home/ec2-user/creds/google.json"
-_DOCAI_CREDENTIALS = service_account.Credentials.from_service_account_file(_DOCAI_CREDS_PATH)
+
+IS_CI_MOCK = os.environ.get("CI_MOCK", "false").lower() == "true"
+if IS_CI_MOCK:
+    class MockCreds: pass
+    _DOCAI_CREDENTIALS = MockCreds()
+else:
+    _DOCAI_CREDENTIALS = service_account.Credentials.from_service_account_file(_DOCAI_CREDS_PATH)
 
 
 def process_document(file_path: str):
