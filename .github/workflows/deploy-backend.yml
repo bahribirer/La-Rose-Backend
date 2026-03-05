@@ -98,9 +98,10 @@ jobs:
           script: |
             cd ${{ secrets.EC2_PROJECT_DIR }}
 
-            echo "🛑 STEP 1: Nuclear cleanup - kill bare-metal uvicorn AND restart Docker..."
-            # ÖNCE bare-metal uvicorn'u öldür (Docker dışında çalışan, portu tutan süreç)
-            pkill -9 -f '[u]vicorn' 2>/dev/null || true
+            echo "🛑 STEP 1: Nuclear cleanup - kill port 8000 processes AND restart Docker..."
+            # Sadece ve sadece port 8000'i dinleyen spesifik PID'yi bul ve öldür (pkill kullanma!)
+            PORT_PID=$(sudo lsof -t -i:8000 || true)
+            if [ ! -z "$PORT_PID" ]; then sudo kill -9 $PORT_PID 2>/dev/null || true; fi
             sleep 1
             docker stop rosap-backend 2>/dev/null || true
             docker rm -f rosap-backend 2>/dev/null || true
