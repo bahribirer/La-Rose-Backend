@@ -95,10 +95,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
           script: |
-            echo "🧹 Forcefully cleaning ALL unused Docker images and build caches to free maximum space..."
-            docker system prune -af --volumes || true
-            docker image prune -af || true
-            docker builder prune -af || true
+            echo "🧹 Cleaning up only dangling Docker images to keep build cache..."
+            docker image prune -f || true
+            docker container prune -f || true
             
             echo "📦 Pulling latest code..."
             cd ${{ secrets.EC2_PROJECT_DIR }}
