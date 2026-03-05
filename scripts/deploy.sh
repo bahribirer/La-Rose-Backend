@@ -35,7 +35,7 @@ EOF
 # 4. Health check
 echo "🏥 4/4 — Health check..."
 sleep 5
-ssh -i "$EC2_KEY" "$EC2_HOST" "curl -sf http://localhost:8000/health || echo '❌ Health check failed'"
+ssh -i "$EC2_KEY" "$EC2_HOST" "curl -sf http://localhost:8001/health || echo '❌ Health check failed'"
 
 echo ""
 echo "✅ Deploy tamamlandı!"
