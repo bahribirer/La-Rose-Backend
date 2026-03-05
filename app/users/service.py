@@ -42,6 +42,7 @@ def serialize_profile(user: dict, profile: Optional[dict]):
             profile.get("free_text_pharmacy_name") if profile else None
         ),
 
+        
         "pharmacy_id": (
             str(profile["pharmacy_id"])
             if profile and profile.get("pharmacy_id")
