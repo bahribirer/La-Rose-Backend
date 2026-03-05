@@ -130,6 +130,11 @@ jobs:
             echo "⏳ Waiting for startup..."
             sleep 15
 
+            echo "🌐 STEP 6: Reloading Nginx to apply port 8001 changes..."
+            # Nginx container içindeyse onu restart et, host üzerindeyse servisi reload et
+            docker restart rosap-nginx 2>/dev/null || true
+            sudo systemctl reload nginx 2>/dev/null || true
+
             echo "🔍 DIAGNOSTIC: Checking port 8001..."
             sudo ss -tlnp | grep ':8001 ' || echo "Port 8001 is NOT listening!"
             docker ps -a | grep rosap-backend
