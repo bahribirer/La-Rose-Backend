@@ -36,12 +36,10 @@ jobs:
       - name: Syntax check
         run: python -m py_compile app/main.py
 
-      - name: Create mock firebase creds
-        run: echo '{"type":"service_account","project_id":"mock","private_key_id":"mock","private_key":"-----BEGIN PRIVATE KEY-----\nmock\n-----END PRIVATE KEY-----\n","client_email":"mock@mock.iam.gserviceaccount.com","client_id":"mock","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"https://www.googleapis.com/robot/v1/metadata/x509/mock@mock.iam.gserviceaccount.com"}' > mock-path.json
-
       - name: Check imports
         env:
-          FIREBASE_CREDENTIALS_PATH: "mock-path.json"
+          CI_MOCK: "true"
+          FIREBASE_CREDENTIALS_PATH: ""
           OPENAI_API_KEY: "mock-key"
           TWILIO_ACCOUNT_SID: "mock-sid"
           TWILIO_AUTH_TOKEN: "mock-token"
