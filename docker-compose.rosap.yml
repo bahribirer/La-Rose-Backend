@@ -1,7 +1,5 @@
-# ==================================
 # La Rosee - Docker Compose
 # ==================================
-name: la-rosee
 
 services:
   # 🔥 BACKEND API
