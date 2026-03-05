@@ -100,7 +100,7 @@ jobs:
 
             echo "🛑 STEP 1: Nuclear cleanup - kill bare-metal uvicorn AND restart Docker..."
             # ÖNCE bare-metal uvicorn'u öldür (Docker dışında çalışan, portu tutan süreç)
-            pkill -9 -f uvicorn 2>/dev/null || true
+            pkill -9 -f '[u]vicorn' 2>/dev/null || true
             sleep 1
             docker stop rosap-backend 2>/dev/null || true
             docker rm -f rosap-backend 2>/dev/null || true
