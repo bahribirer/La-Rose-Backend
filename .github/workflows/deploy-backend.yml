@@ -119,28 +119,28 @@ jobs:
             echo "🔨 STEP 4: Creating .env and building with Compose..."
             # GitHub Secrets'ları .env dosyasına yaz
             cat <<EOF > .env
-APP_NAME=Rosap API
-MONGO_HOST=rosap-mongo
-MONGO_PORT=27017
-MONGO_USER=${{ secrets.MONGO_USER }}
-MONGO_PASS=${{ secrets.MONGO_PASS }}
-DB_NAME=rosap_db
-MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_USER }}
-MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_PASS }}
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
-OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json
-FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json
-DOCAI_CREDENTIALS_PATH=/app/app/creds/google.json
-TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
-TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
-TWILIO_VERIFY_SID=${{ secrets.TWILIO_VERIFY_SID }}
-TWILIO_FROM_NUMBER=${{ secrets.TWILIO_FROM_NUMBER }}
-API_BASE_URL=https://api.rosapmobile.com
-GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
-EOF
+            APP_NAME=Rosap API
+            MONGO_HOST=rosap-mongo
+            MONGO_PORT=27017
+            MONGO_USER=${{ secrets.MONGO_USER }}
+            MONGO_PASS=${{ secrets.MONGO_PASS }}
+            DB_NAME=rosap_db
+            MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_USER }}
+            MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_PASS }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_ALGORITHM=HS256
+            ACCESS_TOKEN_EXPIRE_MINUTES=1440
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            GOOGLE_APPLICATION_CREDENTIALS=/app/app/creds/firebase.json
+            FIREBASE_CREDENTIALS_PATH=/app/app/creds/firebase.json
+            DOCAI_CREDENTIALS_PATH=/app/app/creds/google.json
+            TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
+            TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
+            TWILIO_VERIFY_SID=${{ secrets.TWILIO_VERIFY_SID }}
+            TWILIO_FROM_NUMBER=${{ secrets.TWILIO_FROM_NUMBER }}
+            API_BASE_URL=https://api.rosapmobile.com
+            GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+            EOF
 
             # Docker Compose ile backend'i ayağa kaldır
             # Bu komut backend'i build eder, ağa bağlar ve restart eder
