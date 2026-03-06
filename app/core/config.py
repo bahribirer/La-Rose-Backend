@@ -2,16 +2,20 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     APP_NAME: str = "La Rosee API"
-    
+
     # 🗄️ MongoDB Configuration
+    MONGO_URI_OVERRIDE: str | None = None   # Atlas için: mongodb+srv://...
     MONGO_HOST: str = "localhost"
     MONGO_PORT: int = 27017
     MONGO_USER: str | None = None
     MONGO_PASS: str | None = None
     DB_NAME: str = "rosap_db"
-    
+
     @property
     def MONGO_URI(self) -> str:
+        # Atlas veya tam URI varsa direkt kullan
+        if self.MONGO_URI_OVERRIDE:
+            return self.MONGO_URI_OVERRIDE
         if self.MONGO_USER and self.MONGO_PASS:
             # Docker/Production with Auth
             return f"mongodb://{self.MONGO_USER}:{self.MONGO_PASS}@{self.MONGO_HOST}:{self.MONGO_PORT}/{self.DB_NAME}?authSource=admin"

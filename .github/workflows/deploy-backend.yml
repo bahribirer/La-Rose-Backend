@@ -126,6 +126,7 @@ jobs:
             # GitHub Secrets'ları .env dosyasına yaz
             cat <<EOF > .env
             APP_NAME=Rosap API
+            MONGO_URI_OVERRIDE=${{ secrets.MONGO_URI_OVERRIDE }}
             MONGO_HOST=mongodb
             MONGO_PORT=27017
             MONGO_USER=${{ secrets.MONGO_USER }}
