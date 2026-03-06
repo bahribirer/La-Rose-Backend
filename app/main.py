@@ -27,6 +27,7 @@ app = FastAPI(
 
 # 🔐 CORS — production'da sıkılaştır
 ALLOWED_ORIGINS = [
+    "https://admin.rosapmobile.com",
     "https://rosa-admin.vercel.app",
     "https://rose-admin.vercel.app",
     "http://localhost:5173",
