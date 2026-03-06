@@ -98,6 +98,9 @@ jobs:
           script: |
             cd ${{ secrets.EC2_PROJECT_DIR }}
 
+            echo "📥 STEP 0: Pull latest code from GitHub..."
+            git pull origin main
+
             echo "🛑 STEP 1: Intensive name & port cleanup..."
             # 1a: Identify and stop any systemd service that might be restarting the container
             echo "🔍 Checking for background services..."
