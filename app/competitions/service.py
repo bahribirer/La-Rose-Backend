@@ -168,5 +168,17 @@ async def get_user_competition_status(user_id: ObjectId):
                 "can_register_next": is_registration_period_tr() and next_comp is not None,
             }
     
+    # Kullanıcının ligi yoksa veya başka ligde aktif yarışma varsa bildir
+    global_active = await db.competitions.find_one({
+        "status": "active",
+        "starts_at": {"$lte": now_utc},
+        "ends_at": {"$gte": now_utc},
+    })
+    if global_active:
+        return {
+            "status": "none",
+            "competition": global_active,  # Başka ligin yarışması (lig bilgisi için)
+        }
+
     return {"status": "none"}
 
