@@ -138,11 +138,34 @@ async def debug_token(
         "firebase_uid": user["uid"]
     }
 
+async def _check_active_competition_block(user_id):
+    """Kullanıcı aktif yarışmadaysa eczane değişikliğini engeller."""
+    now_utc = datetime.utcnow()
+    active_comp = await db.competitions.find_one({
+        "status": "active",
+        "starts_at": {"$lte": now_utc},
+        "ends_at": {"$gte": now_utc},
+    })
+    if active_comp:
+        participant = await db.competition_participants.find_one({
+            "user_id": user_id,
+            "competition_id": active_comp["_id"],
+        })
+        if participant:
+            raise HTTPException(
+                status_code=403,
+                detail="Aktif bir yarışmaya katıldığınız için yarışma sona erene kadar eczane değiştiremezsiniz.",
+            )
+
+
 @router.post("/me/match-pharmacy")
 async def match_pharmacy(
     data: MatchPharmacyRequest,
     current_user=Depends(get_current_db_user),
 ):
+    # 🔒 Aktif yarışma katılımcısı kontrolü
+    await _check_active_competition_block(current_user["_id"])
+
     try:
         pharmacy_id = ObjectId(data.pharmacy_id)
     except Exception:
@@ -190,6 +213,9 @@ async def match_pharmacy(
 async def reset_pharmacy(
     current_user=Depends(get_current_db_user),
 ):
+    # 🔒 Aktif yarışma katılımcısı kontrolü
+    await _check_active_competition_block(current_user["_id"])
+
     await db.user_profiles.update_one(
         {"user_id": current_user["_id"]},
         {
