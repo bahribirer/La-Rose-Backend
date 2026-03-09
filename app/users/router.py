@@ -139,8 +139,13 @@ async def debug_token(
     }
 
 async def _check_active_competition_block(user_id):
-    """Kullanıcı aktif yarışmadaysa eczane değişikliğini engeller."""
+    """
+    Kullanıcı aktif yarışmada katılımcıysa VEYA yaklaşan yarışmaya
+    kayıtlıysa eczane değişikliğini engeller.
+    """
     now_utc = datetime.utcnow()
+
+    # 1️⃣ Aktif yarışmada katılımcı mı?
     active_comp = await db.competitions.find_one({
         "status": "active",
         "starts_at": {"$lte": now_utc},
@@ -155,6 +160,19 @@ async def _check_active_competition_block(user_id):
             raise HTTPException(
                 status_code=403,
                 detail="Aktif bir yarışmaya katıldığınız için yarışma sona erene kadar eczane değiştiremezsiniz.",
+            )
+
+    # 2️⃣ Gelecek yarışmaya kayıtlı mı?
+    registration = await db.competition_registrations.find_one({"user_id": user_id})
+    if registration:
+        upcoming = await db.competitions.find_one({
+            "_id": registration["competition_id"],
+            "ends_at": {"$gte": now_utc},
+        })
+        if upcoming:
+            raise HTTPException(
+                status_code=403,
+                detail="Kayıtlı olduğunuz bir yarışma bulunduğu için yarışma sona erene kadar eczane değiştiremezsiniz.",
             )
 
 
