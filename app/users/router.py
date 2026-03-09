@@ -176,6 +176,18 @@ async def _check_active_competition_block(user_id):
             )
 
 
+@router.get("/me/pharmacy-lock")
+async def pharmacy_lock_status(
+    current_user=Depends(get_current_db_user),
+):
+    """Kullanıcının eczane değiştirip değiştiremeyeceğini döndürür."""
+    try:
+        await _check_active_competition_block(current_user["_id"])
+        return {"locked": False}
+    except HTTPException:
+        return {"locked": True}
+
+
 @router.post("/me/match-pharmacy")
 async def match_pharmacy(
     data: MatchPharmacyRequest,
