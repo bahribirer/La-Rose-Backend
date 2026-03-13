@@ -80,3 +80,22 @@ app.include_router(competitions_router)
 app.include_router(pharmacies_router)
 app.include_router(notifications_router)
 app.include_router(field_visits_router)
+
+
+# 🔥 STARTUP: Mümessil role migration
+@app.on_event("startup")
+async def migrate_representative_roles():
+    """Mevcut 4 mümessilin role'ünü 'representative' olarak güncelle."""
+    representative_emails = [
+        "seyma@marlakozmetik.com",
+        "berkay@marlakozmetik.com",
+        "duygu@marlakozmerik.com",
+        "birsen@marlakozmetik.com",
+    ]
+    result = await db.users.update_many(
+        {"email": {"$in": representative_emails}, "role": {"$ne": "representative"}},
+        {"$set": {"role": "representative"}}
+    )
+    if result.modified_count > 0:
+        print(f"✅ {result.modified_count} mümessil role güncellendi → 'representative'")
+
