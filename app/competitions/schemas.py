@@ -1,5 +1,21 @@
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Literal, Optional, List
+
+
+# ================= PRIZE =================
+
+class PrizeItem(BaseModel):
+    place: int
+    reward: str
+    type: str = "gold"  # "gold" | "tl" | "other"
+
+
+class UpdatePrizesBody(BaseModel):
+    prizes: List[PrizeItem]
+
+
+# ================= COMPETITION =================
 
 class CompetitionResponse(BaseModel):
     id: str
@@ -8,11 +24,10 @@ class CompetitionResponse(BaseModel):
     league: str = "-"
     starts_at: datetime
     ends_at: datetime
-
-    status: str  
+    status: str
     # upcoming | active | completed | cancelled
+    prizes: Optional[List[PrizeItem]] = None
 
-from typing import Literal, Optional
 
 class UserCompetitionStatusResponse(BaseModel):
     status: Literal[

@@ -38,6 +38,7 @@ async def get_status(current_user=Depends(get_current_db_user)):
             "league": c.get("league", "-"),
             "starts_at": c["starts_at"],
             "ends_at": c["ends_at"],
+            "prizes": c.get("prizes", []),
         }
 
     return response

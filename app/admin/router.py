@@ -871,6 +871,7 @@ async def admin_list_competitions():
             "status": c.get("status", "upcoming"),
             "starts_at": c["starts_at"],
             "ends_at": c["ends_at"],
+            "prizes": c.get("prizes", []),
         })
 
     return items
@@ -1076,6 +1077,32 @@ async def admin_delete_competition(competition_id: str):
     })
 
     return { "status": "deleted" }
+
+
+# =====================================================
+# PRIZES — ÖDÜL YÖNETİMİ
+# =====================================================
+
+from app.competitions.schemas import UpdatePrizesBody
+
+@router.put("/competitions/{competition_id}/prizes", dependencies=[Depends(admin_required)])
+async def admin_update_prizes(competition_id: str, body: UpdatePrizesBody):
+    if not ObjectId.is_valid(competition_id):
+        raise HTTPException(400, "Invalid competition id")
+
+    comp = await db.competitions.find_one({"_id": ObjectId(competition_id)})
+    if not comp:
+        raise HTTPException(404, "Competition not found")
+
+    prizes_data = [p.model_dump() for p in body.prizes]
+
+    await db.competitions.update_one(
+        {"_id": comp["_id"]},
+        {"$set": {"prizes": prizes_data}}
+    )
+
+    return {"status": "ok", "prizes": prizes_data}
+
 
 @router.get(
     "/competitions/{competition_id}/participants",
