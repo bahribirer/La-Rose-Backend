@@ -1,9 +1,9 @@
 # Bölge → Mümessil (SABİT)
 
 REGION_REPRESENTATIVES = {
-    "Şampiyonlar Ligi": "Birsen",
-    "Süper Lig": "Berkay Onar",
-    "1. Lig": "Şeyma Kart",
+    "Altın Lig": "Birsen",
+    "Gümüş Lig": "Berkay Onar",
+    "Bronz Lig": "Şeyma Kart",
     "Bölge 1": "Şeyma Kart",
     "Bölge 2": "Berkay Onar",
     "Bölge 3": "Duygu Erkan",
@@ -20,9 +20,9 @@ ALL_REPRESENTATIVES = [
 
 # Mümessil → Lig (SABİT)
 REPRESENTATIVE_LEAGUES = {
-    "Şeyma Kart": "1. Lig",
-    "Berkay Onar": "Süper Lig",
-    "Duygu Erkan": "Şampiyonlar Ligi",
-    "Mert Özbey": "Süper Lig",
-    "Birsen": "Şampiyonlar Ligi",
+    "Şeyma Kart": "Bronz Lig",
+    "Berkay Onar": "Gümüş Lig",
+    "Duygu Erkan": "Altın Lig",
+    "Mert Özbey": "Gümüş Lig",
+    "Birsen": "Altın Lig",
 }
