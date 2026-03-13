@@ -18,6 +18,8 @@ class Product(BaseModel):
     cost: Optional[float] = None
     markup: Optional[float] = None
     margin: Optional[float] = None
+    image_url: Optional[str] = None
+    description: Optional[str] = None
 
 class BulkUpdateItem(BaseModel):
     id: str
@@ -33,3 +35,5 @@ class BulkUpdateItem(BaseModel):
     category: Optional[str] = None
     volume: Optional[str] = None
     name: Optional[str] = None
+    image_url: Optional[str] = None
+    description: Optional[str] = None

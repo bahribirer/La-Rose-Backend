@@ -10,12 +10,14 @@ async def admin_required(
 
     user = await db.users.find_one({"firebase_uid": firebase_uid})
 
-    print("🔥 ADMIN CHECK USER:", user)  # 👈 BUNU EKLE
-
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    if user.get("role") != "admin":
+    # ✅ admin rolü VEYA panel_access yetkisi olanlar girebilir
+    is_admin = user.get("role") == "admin"
+    has_panel_access = user.get("panel_access") is True
+
+    if not (is_admin or has_panel_access):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"

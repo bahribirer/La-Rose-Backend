@@ -7,6 +7,7 @@ from app.competitions.utils import end_of_month_utc
 from app.pharmacies.constants import REGION_REPRESENTATIVES, ALL_REPRESENTATIVES
 from app.core.database import db
 from app.core.utils import serialize_mongo
+from firebase_admin import auth as firebase_auth
 
 
 from app.admin.service import (
@@ -635,6 +636,63 @@ async def representative_users_with_competition(
         "in_competition": in_competition,
         "not_in_competition": not_in_competition,
     }
+
+
+# ── KULLANICI SİLME ──────────────────────────────────────────────────────────
+
+from app.core.account_delete import delete_account
+
+@router.delete("/users/delete", dependencies=[Depends(admin_required)])
+async def admin_delete_user(body: dict = Body(...)):
+    """
+    Kullanıcıyı Firebase + tüm MongoDB collection'larından tamamen siler:
+    users, user_profiles, sales_reports, sales_items, competition_registrations,
+    competition_participants, scores, notifications, field_visits, user_settings
+    """
+    user_id = body.get("user_id", "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id zorunludur.")
+
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+
+    # Firebase'den sil
+    firebase_uid = user.get("firebase_uid")
+    if firebase_uid:
+        try:
+            firebase_auth.delete_user(firebase_uid)
+        except firebase_auth.UserNotFoundError:
+            pass  # Firebase'de zaten yoksa devam et
+
+    # Tüm ilgili collection'lardan sil (sales, competitions, field_visits, notifications, profile...)
+    await delete_account(user)
+
+    return {"message": "Kullanıcı ve tüm ilgili veriler başarıyla silindi."}
+
+
+# ── KULLANICI ŞİFRE SIFIRLAMA ────────────────────────────────────────────────
+
+@router.post("/users/set-password", dependencies=[Depends(admin_required)])
+async def admin_set_user_password(body: dict = Body(...)):
+    """
+    Firebase kullanıcısının şifresini mail göndermeden doğrudan değiştirir.
+    Body: { "email": "...", "password": "..." }
+    """
+    email = body.get("email", "").strip()
+    new_password = body.get("password", "")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email zorunludur.")
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Şifre en az 6 karakter olmalıdır.")
+    try:
+        fb_user = firebase_auth.get_user_by_email(email)
+        firebase_auth.update_user(fb_user.uid, password=new_password)
+    except firebase_auth.UserNotFoundError:
+        raise HTTPException(status_code=404, detail="Bu email ile kullanıcı bulunamadı.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": f"{email} kullanıcısının şifresi başarıyla güncellendi."}
 
 
 @router.get("/users/{user_id}", dependencies=[Depends(admin_required)])
@@ -1420,3 +1478,63 @@ async def upload_pharmacies(file: UploadFile = File(...)):
     content = await file.read()
     count = await process_pharmacy_excel(content)
     return {"message": f"{count} eczane başarıyla güncellendi.", "count": count}
+
+
+# ── PANEL KULLANICI YÖNETİMİ ─────────────────────────────────────────────────
+
+@router.get("/panel-users", dependencies=[Depends(admin_required)])
+async def get_panel_users():
+    """Admin paneline erişimi olan tüm kullanıcıları listeler."""
+    users = await db.users.find(
+        {"$or": [{"role": "admin"}, {"panel_access": True}]},
+        {"_id": 1, "email": 1, "full_name": 1, "role": 1, "panel_access": 1}
+    ).to_list(length=None)
+    return [
+        {
+            "id": str(u["_id"]),
+            "email": u.get("email"),
+            "full_name": u.get("full_name"),
+            "role": u.get("role", "user"),
+            "panel_access": u.get("panel_access", False),
+        }
+        for u in users
+    ]
+
+
+@router.post("/panel-users/grant", dependencies=[Depends(admin_required)])
+async def grant_panel_access(body: dict = Body(...)):
+    """Email'e göre kullanıcıya panel erişimi ver."""
+    email = body.get("email", "").strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email zorunludur.")
+
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"panel_access": True}}
+    )
+    return {"message": f"{email} kullanıcısına panel erişimi verildi."}
+
+
+@router.post("/panel-users/revoke", dependencies=[Depends(admin_required)])
+async def revoke_panel_access(body: dict = Body(...)):
+    """Panel erişimini geri al (admin rolünden almaz, sadece panel_access kaldırır)."""
+    user_id = body.get("user_id", "").strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id zorunludur.")
+
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+
+    if user.get("role") == "admin":
+        raise HTTPException(status_code=400, detail="Admin kullanıcısının yetkisi kaldırılamaz.")
+
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"panel_access": False}}
+    )
+    return {"message": "Panel erişimi kaldırıldı."}

@@ -213,3 +213,28 @@ async def reset_verify_password(payload: ResetPasswordRequest):
         raise HTTPException(status_code=500, detail=f"Şifre güncellenemedi: {str(e)}")
 
     return {"success": True, "email": user.get("email")}
+
+
+# ── PANEL ERİŞİM KONTROLÜ ────────────────────────────────────────────────────
+@router.get("/panel-check")
+async def panel_check(firebase_user=Depends(get_current_firebase_user)):
+    """Admin paneline giriş yetkisi var mı kontrol eder."""
+    firebase_uid = firebase_user["uid"]
+    user = await db.users.find_one({"firebase_uid": firebase_uid})
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Kullanıcı bulunamadı")
+
+    is_admin = user.get("role") == "admin"
+    has_panel_access = user.get("panel_access") is True
+
+    if not (is_admin or has_panel_access):
+        raise HTTPException(status_code=403, detail="Panel erişim yetkiniz yok")
+
+    return {
+        "id": str(user["_id"]),
+        "email": user.get("email"),
+        "full_name": user.get("full_name"),
+        "role": user.get("role"),
+        "panel_access": has_panel_access,
+    }
