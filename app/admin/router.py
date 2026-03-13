@@ -1527,6 +1527,18 @@ async def get_panel_users():
         for u in users
     ]
 
+# 🔧 DEBUG: Kullanıcı role kontrolü (geçici)
+@router.get("/debug/user-role", dependencies=[Depends(admin_required)])
+async def debug_user_role(email: str = Query(...)):
+    user = await db.users.find_one({"email": email})
+    if not user:
+        return {"error": "User not found"}
+    return {
+        "email": user.get("email"),
+        "role": user.get("role"),
+        "panel_access": user.get("panel_access"),
+    }
+
 
 @router.post("/panel-users/grant", dependencies=[Depends(admin_required)])
 async def grant_panel_access(body: dict = Body(...)):
