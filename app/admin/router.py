@@ -1512,6 +1512,12 @@ async def upload_pharmacies(file: UploadFile = File(...)):
 @router.get("/panel-users", dependencies=[Depends(admin_required)])
 async def get_panel_users():
     """Admin paneline erişimi olan tüm kullanıcıları listeler."""
+    # 🔥 AUTO-FIX: panel_access olup role'ü hâlâ user olanları düzelt
+    await db.users.update_many(
+        {"panel_access": True, "role": {"$nin": ["admin", "representative"]}},
+        {"$set": {"role": "representative"}}
+    )
+
     users = await db.users.find(
         {"$or": [{"role": "admin"}, {"panel_access": True}]},
         {"_id": 1, "email": 1, "full_name": 1, "role": 1, "panel_access": 1}
@@ -1555,7 +1561,12 @@ async def grant_panel_access(body: dict = Body(...)):
         {"_id": user["_id"]},
         {"$set": {"panel_access": True, "role": "representative"}}
     )
-    return {"message": f"{email} kullanıcısına panel erişimi verildi."}
+
+    # 🔥 Doğrulama: güncellenen veriyi geri oku
+    updated = await db.users.find_one({"_id": user["_id"]})
+    print(f"🔥 GRANT VERIFIED: email={email}, role={updated.get('role')}, panel_access={updated.get('panel_access')}")
+
+    return {"message": f"{email} kullanıcısına panel erişimi verildi.", "role": updated.get("role")}
 
 
 @router.post("/panel-users/revoke", dependencies=[Depends(admin_required)])
