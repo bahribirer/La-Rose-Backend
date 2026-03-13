@@ -1541,7 +1541,7 @@ async def grant_panel_access(body: dict = Body(...)):
 
     await db.users.update_one(
         {"_id": user["_id"]},
-        {"$set": {"panel_access": True}}
+        {"$set": {"panel_access": True, "role": "representative"}}
     )
     return {"message": f"{email} kullanıcısına panel erişimi verildi."}
 
@@ -1562,6 +1562,6 @@ async def revoke_panel_access(body: dict = Body(...)):
 
     await db.users.update_one(
         {"_id": ObjectId(user_id)},
-        {"$set": {"panel_access": False}}
+        {"$set": {"panel_access": False, "role": "user"}}
     )
     return {"message": "Panel erişimi kaldırıldı."}

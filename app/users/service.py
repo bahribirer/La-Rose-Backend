@@ -60,6 +60,8 @@ def serialize_profile(user: dict, profile: Optional[dict]):
 
         "onboarding_completed": bool(user.get("onboarding_completed")),
         "city": profile.get("city") if profile else None,
+
+        "panel_access": bool(user.get("panel_access")),
     }
 
 
