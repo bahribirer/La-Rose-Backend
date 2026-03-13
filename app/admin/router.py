@@ -755,7 +755,7 @@ async def admin_user_detail(user_id: str):
     is_participant = False
     competition_report_count = 0
     
-    # Aktif yarışma var mı?
+    # A) Aktif yarışma var mı?
     active_comp = await db.competitions.find_one({"status": "active"})
     
     if active_comp:
@@ -790,7 +790,25 @@ async def admin_user_detail(user_id: str):
                     "is_finished_individually": participant.get("finished_at") is not None
                 }
     
-    # Aktif yarışma yoksa, en son katıldığı yarışmayı kontrol et
+    # B) Aktif yarışma yoksa veya katılımcı değilse → upcoming yarışmaya kayıtlı mı?
+    if not is_participant:
+        upcoming_comp = await db.competitions.find_one({"status": "upcoming"})
+        if upcoming_comp:
+            registration = await db.competition_registrations.find_one({
+                "competition_id": upcoming_comp["_id"],
+                "user_id": u["_id"],
+            })
+            if registration:
+                is_participant = True
+                last_comp_info = {
+                    "id": str(upcoming_comp["_id"]),
+                    "status": "registered",
+                    "year": upcoming_comp["year"],
+                    "month": upcoming_comp["month"],
+                    "is_finished_individually": False
+                }
+    
+    # C) Hiçbiri yoksa en son katıldığı tamamlanmış yarışmayı kontrol et
     if not last_comp_info:
         last_participation = await db.competition_participants.find_one(
             { "user_id": u["_id"] }, 
