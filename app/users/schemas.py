@@ -11,6 +11,7 @@ class UserProfileResponse(BaseModel):
     id: str
     email: Optional[str] = None
     full_name: Optional[str] = None
+    role: Optional[str] = "user"
 
     phone_number: Optional[str] = None
     phone_verified: bool
