@@ -743,6 +743,7 @@ async def admin_user_detail(user_id: str):
     now = datetime.utcnow()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
+    # Normal rapor sayısı (yarışma dışı)
     current_month_count = await db.sales_reports.count_documents({
         "user_id": u["_id"],
         "createdAt": {"$gte": month_start},
@@ -751,30 +752,56 @@ async def admin_user_detail(user_id: str):
 
     # 3️⃣ COMPETITION INFO
     last_comp_info = None
+    is_participant = False
+    competition_report_count = 0
     
-    # En son katıldığı yarışmayı bul
-    last_participation = await db.competition_participants.find_one(
-        { "user_id": u["_id"] }, 
-        sort=[("accepted_at", -1)]
-    )
-
-    if last_participation:
-        comp = await db.competitions.find_one({"_id": last_participation["competition_id"]})
-        if comp:
-            # 🔥 GERÇEK STATUS KONTROLÜ (Tarih + Bireysel Bitiş)
+    # Aktif yarışma var mı?
+    active_comp = await db.competitions.find_one({"status": "active"})
+    
+    if active_comp:
+        # Bu kullanıcı katılımcı mı?
+        participant = await db.competition_participants.find_one({
+            "competition_id": active_comp["_id"],
+            "user_id": u["_id"],
+        })
+        
+        if participant:
+            is_participant = True
             is_truly_active = (
-                comp.get("status") == "active" and 
-                comp["starts_at"] <= now <= comp["ends_at"] and
-                (last_participation.get("finished_at") is None or last_participation["finished_at"] > now)
+                active_comp["starts_at"] <= now <= active_comp["ends_at"] and
+                (participant.get("finished_at") is None or participant["finished_at"] > now)
             )
             
-            if not is_truly_active and last_participation.get("finished_at") and last_participation["finished_at"] <= now:
-                # Kullanıcı bireysel olarak bitmişse, admin panelinde onu "Normal Mod"da (0/4 hedef) gösterelim.
+            # Yarışma raporlarını say
+            competition_report_count = await db.sales_reports.count_documents({
+                "user_id": u["_id"],
+                "competition_id": active_comp["_id"],
+                "is_competition_report": True,
+            })
+            
+            if not is_truly_active and participant.get("finished_at") and participant["finished_at"] <= now:
                 last_comp_info = None
             else:
                 last_comp_info = {
+                    "id": str(active_comp["_id"]),
+                    "status": "active" if is_truly_active else active_comp.get("status"),
+                    "year": active_comp["year"],
+                    "month": active_comp["month"],
+                    "is_finished_individually": participant.get("finished_at") is not None
+                }
+    
+    # Aktif yarışma yoksa, en son katıldığı yarışmayı kontrol et
+    if not last_comp_info:
+        last_participation = await db.competition_participants.find_one(
+            { "user_id": u["_id"] }, 
+            sort=[("accepted_at", -1)]
+        )
+        if last_participation:
+            comp = await db.competitions.find_one({"_id": last_participation["competition_id"]})
+            if comp and comp.get("status") == "completed":
+                last_comp_info = {
                     "id": str(comp["_id"]),
-                    "status": "active" if is_truly_active else comp.get("status"),
+                    "status": "completed",
                     "year": comp["year"],
                     "month": comp["month"],
                     "is_finished_individually": last_participation.get("finished_at") is not None
@@ -800,6 +827,7 @@ async def admin_user_detail(user_id: str):
         "id": str(u["_id"]),
         "name": u.get("full_name"),
         "email": u.get("email"),
+        "role": u.get("role", "user"),
         "pharmacy": profile.get("pharmacy_name"),
         "league": league,
         "representative": representative,
@@ -810,9 +838,11 @@ async def admin_user_detail(user_id: str):
         "total_profit": u.get("total_profit", 0),
         "total_revenue": u.get("total_profit", 0) + u.get("total_cost", 0),
 
-        # Context Stats (for UI Reset & Download)
+        # Context Stats
         "current_month_reports": current_month_count,
-        "competition": last_comp_info
+        "is_participant": is_participant,
+        "competition_report_count": competition_report_count,
+        "competition": last_comp_info,
     }
 
 
