@@ -85,17 +85,27 @@ app.include_router(field_visits_router)
 # 🔥 STARTUP: Mümessil role migration
 @app.on_event("startup")
 async def migrate_representative_roles():
-    """Mevcut 4 mümessilin role'ünü 'representative' olarak güncelle."""
+    """Mevcut mümessillerin ve panel erişimi olan kullanıcıların role'ünü güncelle."""
+    # 1) Hardcoded 4 mümessil
     representative_emails = [
         "seyma@marlakozmetik.com",
         "berkay@marlakozmetik.com",
         "duygu@marlakozmerik.com",
         "birsen@marlakozmetik.com",
     ]
-    result = await db.users.update_many(
+    r1 = await db.users.update_many(
         {"email": {"$in": representative_emails}, "role": {"$ne": "representative"}},
         {"$set": {"role": "representative"}}
     )
-    if result.modified_count > 0:
-        print(f"✅ {result.modified_count} mümessil role güncellendi → 'representative'")
+    if r1.modified_count > 0:
+        print(f"✅ {r1.modified_count} mümessil role güncellendi → 'representative'")
+
+    # 2) panel_access: True olup role'ü hâlâ 'user' olanlar
+    r2 = await db.users.update_many(
+        {"panel_access": True, "role": {"$nin": ["admin", "representative"]}},
+        {"$set": {"role": "representative"}}
+    )
+    if r2.modified_count > 0:
+        print(f"✅ {r2.modified_count} panel kullanıcısı role güncellendi → 'representative'")
+
 
