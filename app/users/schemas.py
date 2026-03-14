@@ -34,6 +34,7 @@ class UserProfileResponse(BaseModel):
     league: Optional[str] = None
     representative: Optional[str] = None
 
+    panel_access: Optional[bool] = None
 
     model_config = {"from_attributes": True}
 
