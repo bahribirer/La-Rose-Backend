@@ -252,8 +252,10 @@ async def reset_pharmacy(
             "$set": {
                 "pharmacy_id": None,
                 "pharmacy_name": None,
+                "free_text_pharmacy_name": None,
                 "district": None,
                 "region": None,
+                "league": None,
                 "representative": None,
                 "updated_at": datetime.utcnow(),
             }
