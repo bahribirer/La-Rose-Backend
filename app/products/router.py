@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, Depends, HTTPException
-from app.products.service import load_products_public
+from app.products.service import load_products_public, load_products_website
 from app.products.schemas import BulkUpdateItem
 from typing import Optional, List
 from app.admin.dependencies import admin_required
@@ -37,6 +37,15 @@ async def list_products(
         "count": len(items),
         "items": items
     }
+
+@router.get("/website")
+async def list_products_website():
+    """
+    Web sitesi için public endpoint — Firebase token gerekmez, fiyat bilgisi dönmez
+    """
+    products = await load_products_website()
+    return {"items": products}
+
 
 @router.post("/admin/bulk-update", dependencies=[Depends(admin_required)])
 async def bulk_update_products(payload: List[BulkUpdateItem]):

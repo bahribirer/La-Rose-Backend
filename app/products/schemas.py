@@ -20,6 +20,8 @@ class Product(BaseModel):
     margin: Optional[float] = None
     image_url: Optional[str] = None
     description: Optional[str] = None
+    name_tr: Optional[str] = None
+    slug: Optional[str] = None
 
 class BulkUpdateItem(BaseModel):
     id: str
@@ -37,3 +39,5 @@ class BulkUpdateItem(BaseModel):
     name: Optional[str] = None
     image_url: Optional[str] = None
     description: Optional[str] = None
+    name_tr: Optional[str] = None
+    slug: Optional[str] = None

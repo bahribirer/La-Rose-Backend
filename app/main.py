@@ -30,6 +30,8 @@ ALLOWED_ORIGINS = [
     "https://admin.rosapmobile.com",
     "https://rosa-admin.vercel.app",
     "https://rose-admin.vercel.app",
+    "https://larosee.com.tr",
+    "https://www.larosee.com.tr",
     "http://localhost:5173",
     "http://localhost:3000",
 ]

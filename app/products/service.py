@@ -54,8 +54,22 @@ async def load_products_public() -> List[Dict]:
     return res
 
 
-    return {
-        "total": total,
-        "count": len(result),
-        "items": result
-    }
+async def load_products_website() -> List[Dict]:
+    """
+    Web sitesi için public loader — fiyat bilgisi yok, slug dahil
+    """
+    products = await load_products()
+    res = []
+    for p in products:
+        res.append({
+            "id": p["id"],
+            "barcode": p.get("gtin") or p["id"],
+            "name": p.get("name") or "",
+            "name_tr": p.get("name_tr") or p.get("tr_name") or p.get("name") or "",
+            "subtitle": p.get("volume"),
+            "slug": p.get("slug") or "",
+            "category": p.get("category"),
+            "details": p.get("description"),
+            "image": p.get("image_url"),
+        })
+    return res
