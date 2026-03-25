@@ -153,18 +153,31 @@ async def seed_web_fields():
 
 @router.patch("/admin/{product_id}", dependencies=[Depends(admin_required)])
 async def update_product_metadata(product_id: str, payload: dict):
-    # Validations or other logic can go here if needed
+    import logging
+    logger = logging.getLogger("products.patch")
+    logger.info(f"PATCH /admin/{product_id} payload={payload}")
 
     res = await db.products.update_one(
         {"id": product_id},
         {"$set": payload}
     )
-    
+
+    logger.info(f"MongoDB result: matched={res.matched_count}, modified={res.modified_count}")
+
     if res.matched_count == 0:
         raise HTTPException(404, "Ürün bulunamadı")
-        
+
+    # Verify the update was written
+    updated = await db.products.find_one({"id": product_id}, {"_id": 0, "id": 1, "featured_web": 1, "name_tr": 1})
+    logger.info(f"After update, DB has: {updated}")
+
     # Invalidate cache if exists
     from app.products.service import load_products
     await load_products(force_reload=True)
-    
-    return {"message": "Ürün güncellendi"}
+
+    return {
+        "message": "Ürün güncellendi",
+        "matched": res.matched_count,
+        "modified": res.modified_count,
+        "current_value": updated.get("featured_web") if updated else None
+    }
