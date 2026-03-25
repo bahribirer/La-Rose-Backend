@@ -86,5 +86,6 @@ async def load_products_website() -> List[Dict]:
             "category": web_cat,
             "details": p.get("description"),
             "image": p.get("image_url"),
+            "featured_web": bool(p.get("featured_web")),
         })
     return res

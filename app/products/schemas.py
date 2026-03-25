@@ -22,6 +22,7 @@ class Product(BaseModel):
     description: Optional[str] = None
     name_tr: Optional[str] = None
     slug: Optional[str] = None
+    featured_web: Optional[bool] = None
 
 class BulkUpdateItem(BaseModel):
     id: str
@@ -41,3 +42,4 @@ class BulkUpdateItem(BaseModel):
     description: Optional[str] = None
     name_tr: Optional[str] = None
     slug: Optional[str] = None
+    featured_web: Optional[bool] = None
