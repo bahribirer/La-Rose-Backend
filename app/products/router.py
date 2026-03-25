@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query, Depends, HTTPException
 from app.products.service import load_products_public, load_products_website
-from app.products.schemas import BulkUpdateItem
+from app.products.schemas import BulkUpdateItem, CreateProduct
 from typing import Optional, List
 from app.admin.dependencies import admin_required
 from app.core.database import db
@@ -45,6 +45,29 @@ async def list_products_website():
     """
     products = await load_products_website()
     return {"items": products}
+
+
+@router.post("/admin/create", dependencies=[Depends(admin_required)])
+async def create_product(product: CreateProduct):
+    """
+    Yeni ürün oluştur — hem mobil hem web'de görünür
+    """
+    # Check if product with same ID already exists
+    existing = await db.products.find_one({"id": product.id})
+    if existing:
+        raise HTTPException(409, f"Bu barkod ({product.id}) ile zaten bir ürün var")
+
+    product_dict = product.dict()
+    # Set gtin same as id if not provided
+    product_dict["gtin"] = product.id
+
+    await db.products.insert_one(product_dict)
+
+    # Invalidate cache
+    from app.products.service import load_products
+    await load_products(force_reload=True)
+
+    return {"message": "Ürün oluşturuldu", "id": product.id}
 
 
 @router.post("/admin/bulk-update", dependencies=[Depends(admin_required)])

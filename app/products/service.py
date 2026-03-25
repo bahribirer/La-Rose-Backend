@@ -50,6 +50,10 @@ async def load_products_public() -> List[Dict]:
             "gtin": p.get("gtin") or p["id"],
             "image_url": p.get("image_url"),
             "description": p.get("description"),
+            "name_tr": p.get("name_tr"),
+            "slug": p.get("slug"),
+            "web_price": p.get("web_price"),
+            "featured_web": bool(p.get("featured_web")),
         })
     return res
 
@@ -87,5 +91,6 @@ async def load_products_website() -> List[Dict]:
             "details": p.get("description"),
             "image": p.get("image_url"),
             "featured_web": bool(p.get("featured_web")),
+            "price": p.get("web_price"),
         })
     return res

@@ -23,6 +23,24 @@ class Product(BaseModel):
     name_tr: Optional[str] = None
     slug: Optional[str] = None
     featured_web: Optional[bool] = None
+    web_price: Optional[float] = None
+
+
+class CreateProduct(BaseModel):
+    id: str  # barkod
+    name: str
+    name_tr: Optional[str] = None
+    category: Optional[str] = None
+    volume: Optional[str] = None
+    slug: Optional[str] = None
+    image_url: Optional[str] = None
+    description: Optional[str] = None
+    esf_price: Optional[float] = None
+    psf_price: Optional[float] = None
+    wsf_price: Optional[float] = None
+    price_eur: Optional[float] = None
+    web_price: Optional[float] = None
+
 
 class BulkUpdateItem(BaseModel):
     id: str
@@ -43,3 +61,4 @@ class BulkUpdateItem(BaseModel):
     name_tr: Optional[str] = None
     slug: Optional[str] = None
     featured_web: Optional[bool] = None
+    web_price: Optional[float] = None
