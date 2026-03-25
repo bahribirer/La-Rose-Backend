@@ -1,24 +1,25 @@
 from app.core.database import db
 from typing import List, Dict, Optional
 
-# 🧠 in-memory cache
-_PRODUCT_CACHE: Optional[List[Dict]] = None
-
-
 async def load_products(force_reload: bool = False) -> List[Dict]:
     """
-    Internal product loader (matcher, scan)
+    Internal product loader
     """
-    global _PRODUCT_CACHE
-
-    if _PRODUCT_CACHE is not None and not force_reload:
-        return _PRODUCT_CACHE
-
     cursor = db.products.find({}, {"_id": 0})
     products = await cursor.to_list(length=None)
-
-    _PRODUCT_CACHE = products
     return products
+
+import os
+
+def get_absolute_image_url(url: Optional[str]) -> Optional[str]:
+    if not url: return None
+    if url.startswith('http'): return url
+    # Use API_BASE_URL from env if available
+    base_url = os.getenv("API_BASE_URL", "").rstrip("/")
+    if not base_url:
+        # Fallback to a default if env is missing (better to have env set)
+        base_url = "https://api.rosapmobile.com"
+    return f"{base_url}{url}"
 
 async def load_products_public() -> List[Dict]:
     """
@@ -30,7 +31,7 @@ async def load_products_public() -> List[Dict]:
     res = []
     for p in products:
         # Prefer tr_name if available, else name
-        best_name = p.get("tr_name") or p.get("name") or "Bilinmeyen Ürün"
+        best_name = p.get("name_tr") or p.get("tr_name") or p.get("name") or "Bilinmeyen Ürün"
         
         res.append({
             "id": p["id"],
@@ -48,9 +49,9 @@ async def load_products_public() -> List[Dict]:
             "markup": p.get("markup"),
             "margin": p.get("margin"),
             "gtin": p.get("gtin") or p["id"],
-            "image_url": p.get("image_url"),
+            "image_url": get_absolute_image_url(p.get("image_url")),
             "description": p.get("description"),
-            "name_tr": p.get("name_tr"),
+            "name_tr": p.get("name_tr") or p.get("tr_name") or p.get("name"),
             "slug": p.get("slug"),
             "web_price": p.get("web_price"),
             "featured_web": bool(p.get("featured_web")),
@@ -80,16 +81,24 @@ async def load_products_website() -> List[Dict]:
     for p in products:
         raw_cat = p.get("category") or ""
         web_cat = _WEB_CATEGORY_MAP.get(raw_cat, raw_cat.lower().replace(" ", "-"))
+        
+        # Ensure name_tr and slug are never empty
+        name_tr = p.get("name_tr") or p.get("tr_name") or p.get("name") or ""
+        slug = p.get("slug")
+        if not slug and p.get("name"):
+            # Simple slug fallback
+            slug = p["name"].lower().replace(" ", "-")
+
         res.append({
             "id": p["id"],
             "barcode": p.get("gtin") or p["id"],
             "name": p.get("name") or "",
-            "name_tr": p.get("name_tr") or p.get("tr_name") or p.get("name") or "",
+            "name_tr": name_tr,
             "subtitle": p.get("volume"),
-            "slug": p.get("slug") or "",
+            "slug": slug or "",
             "category": web_cat,
             "details": p.get("description"),
-            "image": p.get("image_url"),
+            "image": get_absolute_image_url(p.get("image_url")),
             "featured_web": bool(p.get("featured_web")),
             "price": p.get("web_price"),
         })
