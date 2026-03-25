@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Query, Depends, HTTPException
+from fastapi import APIRouter, Query, Depends, HTTPException, UploadFile, File
 from app.products.service import load_products_public, load_products_website
 from app.products.schemas import BulkUpdateItem, CreateProduct
 from typing import Optional, List
 from app.admin.dependencies import admin_required
 from app.core.database import db
+import os
+import uuid
 
 router = APIRouter(
     prefix="/products",
@@ -238,3 +240,38 @@ async def delete_product(product_id: str):
 
     logger.info(f"Product {product_id} deleted successfully")
     return {"message": "Ürün silindi", "id": product_id}
+
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "products")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+
+@router.post("/admin/upload-image", dependencies=[Depends(admin_required)])
+async def upload_product_image(file: UploadFile = File(...)):
+    """
+    Ürün görseli yükler — admin yetkisi gereklidir
+    Returns the public URL of the uploaded image
+    """
+    # Validate extension
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, detail=f"Desteklenmeyen dosya türü: {ext}. İzin verilenler: {', '.join(ALLOWED_EXTENSIONS)}")
+
+    # Read and validate size
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, detail="Dosya boyutu 5MB'dan büyük olamaz")
+
+    # Generate unique filename
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, unique_name)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # Return public URL
+    image_url = f"/uploads/products/{unique_name}"
+    return {"url": image_url, "filename": unique_name}
