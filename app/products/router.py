@@ -215,7 +215,19 @@ async def delete_product(product_id: str):
     logger = logging.getLogger("products.delete")
     logger.info(f"DELETE /admin/{product_id}")
 
+    # Try string match first
     res = await db.products.delete_one({"id": product_id})
+
+    # If not found, try integer match
+    if res.deleted_count == 0:
+        try:
+            res = await db.products.delete_one({"id": int(product_id)})
+        except (ValueError, TypeError):
+            pass
+
+    # If still not found, try gtin field
+    if res.deleted_count == 0:
+        res = await db.products.delete_one({"gtin": product_id})
 
     if res.deleted_count == 0:
         raise HTTPException(404, detail="Ürün bulunamadı")
