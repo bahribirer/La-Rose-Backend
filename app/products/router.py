@@ -204,3 +204,25 @@ async def update_product_metadata(product_id: str, payload: dict):
         "modified": res.modified_count,
         "current_value": updated.get("featured_web") if updated else None
     }
+
+
+@router.delete("/admin/{product_id}", dependencies=[Depends(admin_required)])
+async def delete_product(product_id: str):
+    """
+    Ürünü kalıcı olarak siler — admin yetkisi gereklidir
+    """
+    import logging
+    logger = logging.getLogger("products.delete")
+    logger.info(f"DELETE /admin/{product_id}")
+
+    res = await db.products.delete_one({"id": product_id})
+
+    if res.deleted_count == 0:
+        raise HTTPException(404, detail="Ürün bulunamadı")
+
+    # Invalidate cache
+    from app.products.service import load_products
+    await load_products(force_reload=True)
+
+    logger.info(f"Product {product_id} deleted successfully")
+    return {"message": "Ürün silindi", "id": product_id}
