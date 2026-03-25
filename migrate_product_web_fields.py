@@ -70,7 +70,7 @@ async def run():
 
     for gtin, web_data in WEB_PRODUCTS.items():
         result = await db.products.update_one(
-            {"gtin": gtin},
+            {"id": gtin},
             {"$set": {
                 "slug": web_data["slug"],
                 "name_tr": web_data["name_tr"],

@@ -54,6 +54,19 @@ async def load_products_public() -> List[Dict]:
     return res
 
 
+_WEB_CATEGORY_MAP = {
+    "YÜZ BAKIM": "yuz-bakimi",
+    "VÜCUT BAKIM": "vucut-bakimi",
+    "GÜNEŞ SERİSİ": "gunes-bakimi",
+    "HİJYEN": "gunluk-hijyen",
+    "Mon Petit LR": "bebek-bakimi",
+    "DUDAK BAKIM": "makyaj-bakim",
+    "MAKYAJ": "makyaj-bakim",
+    "AKSESUAR": "aksesuar",
+    "RUTİN": "rutinler",
+}
+
+
 async def load_products_website() -> List[Dict]:
     """
     Web sitesi için public loader — fiyat bilgisi yok, slug dahil
@@ -61,6 +74,8 @@ async def load_products_website() -> List[Dict]:
     products = await load_products()
     res = []
     for p in products:
+        raw_cat = p.get("category") or ""
+        web_cat = _WEB_CATEGORY_MAP.get(raw_cat, raw_cat.lower().replace(" ", "-"))
         res.append({
             "id": p["id"],
             "barcode": p.get("gtin") or p["id"],
@@ -68,7 +83,7 @@ async def load_products_website() -> List[Dict]:
             "name_tr": p.get("name_tr") or p.get("tr_name") or p.get("name") or "",
             "subtitle": p.get("volume"),
             "slug": p.get("slug") or "",
-            "category": p.get("category"),
+            "category": web_cat,
             "details": p.get("description"),
             "image": p.get("image_url"),
         })
