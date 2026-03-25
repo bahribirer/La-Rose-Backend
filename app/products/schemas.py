@@ -39,6 +39,11 @@ class CreateProduct(BaseModel):
     psf_price: Optional[float] = None
     wsf_price: Optional[float] = None
     price_eur: Optional[float] = None
+    price_51: Optional[float] = None
+    cost: Optional[float] = None
+    profit: Optional[float] = None
+    markup: Optional[float] = None
+    margin: Optional[float] = None
     web_price: Optional[float] = None
 
 
