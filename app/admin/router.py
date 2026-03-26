@@ -984,11 +984,6 @@ async def admin_start_competition(competition_id: str):
     if comp.get("status") != "upcoming":
         raise HTTPException(400, "Only upcoming competitions can be started")
 
-    # 🛡️ ZAMAN KONTROLÜ
-    now = datetime.utcnow()
-    if comp["starts_at"] > now:
-        raise HTTPException(400, "Henüz yarışma başlangıç tarihi gelmedi")
-
     # 🔒 AY BAZLI TEK YARIŞMA KURALI
     existing = await db.competitions.find_one({
         "_id": { "$ne": comp["_id"] },
