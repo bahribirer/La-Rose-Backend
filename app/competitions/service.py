@@ -59,6 +59,7 @@ async def get_user_competition_status(user_id: ObjectId):
         **league_filter(),
     }
     current = await db.competitions.find_one(current_query)
+    accepted = None  # 🔥 Güvenli tanım — aşağıdaki bloklarda kullanılacak
 
     if current:
         # 🛡️ OTO-AKTİVASYON (Admin başlatmayı unutmuşsa veya 1 Ocak geldiyse)
@@ -170,7 +171,6 @@ async def get_user_competition_status(user_id: ObjectId):
     # Kullanıcının ligi yoksa veya başka ligde aktif yarışma varsa bildir
     global_active = await db.competitions.find_one({
         "status": "active",
-        "starts_at": {"$lte": now_utc},
         "ends_at": {"$gte": now_utc},
     })
     if global_active:
