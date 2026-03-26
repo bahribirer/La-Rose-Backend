@@ -10,7 +10,6 @@ async def get_current_competition():
 
     return await db.competitions.find_one({
         "status": "active",                # 🔥 ZORUNLU
-        "starts_at": {"$lte": now},
         "ends_at": {"$gte": now},
     })
 
@@ -53,9 +52,9 @@ async def get_user_competition_status(user_id: ObjectId):
     next_comp = await db.competitions.find_one(next_query, sort=[("starts_at", 1)])
 
     # 1️⃣ AKTİF YARIŞMA SORGUSU (En yüksek öncelik)
+    # Admin anında başlatabilir — starts_at kontrolü yapma, status yeterli
     current_query = {
-        "status": {"$in": ["active", "upcoming"]},
-        "starts_at": {"$lte": now_utc},
+        "status": "active",
         "ends_at": {"$gte": now_utc},
         **league_filter(),
     }

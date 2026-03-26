@@ -94,10 +94,9 @@ async def accept_current_competition(
 ):
     now = datetime.utcnow()
 
-    # 🔥 SADECE ACTIVE
+    # 🔥 SADECE ACTIVE — starts_at kontrolü yok, admin anında başlatabilir
     competition = await db.competitions.find_one({
         "status": "active",
-        "starts_at": {"$lte": now},
         "ends_at": {"$gte": now},
     })
 
