@@ -1214,8 +1214,8 @@ async def admin_competition_participants(competition_id: str):
                                     { "$eq": ["$user_id", "$$uid"] },
                                     { "$eq": ["$competition_id", ObjectId(competition_id)] },
                                     # 🔥 STRICT DATE FILTER:
-                                    # Admin panelinde de sadece takvim aralığındakileri say.
-                                    { "$gte": ["$createdAt", competition["starts_at"]] },
+                                    # activated_at varsa onu kullan (admin anında başlatabilir)
+                                    { "$gte": ["$createdAt", competition.get("activated_at") or competition["starts_at"]] },
                                     { "$lte": ["$createdAt", competition["ends_at"]] }
                                 ]
                             }

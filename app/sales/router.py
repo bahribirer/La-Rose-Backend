@@ -192,10 +192,9 @@ async def list_sales_reports(
     # ====== COMPETITION MODE CHECK ======
     active_comp = await db.competitions.find_one({
         "status": "active",
-        "starts_at": {"$lte": now},
         "ends_at": {"$gte": now},
     })
-    
+
     is_in_active_competition = False
     active_comp_id = None
     if active_comp:
