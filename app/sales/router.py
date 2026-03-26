@@ -717,12 +717,12 @@ async def get_scoreboard(
             "$match": {
                 **user_match,
                 
-                # 🔥 STRICT ID & DATE FILTER: 
+                # 🔥 STRICT ID & DATE FILTER:
                 # 1. ID eşleşmeli.
-                # 2. Tarih aralığında olmalı (Erken başlayanları/eskiyi temizle).
+                # 2. Tarih: activated_at varsa onu kullan (admin anında başlatabilir)
                 "competition_id": competition["_id"],
                 "createdAt": {
-                    "$gte": competition["starts_at"],
+                    "$gte": competition.get("activated_at") or competition["starts_at"],
                     "$lte": competition["ends_at"],
                 },
             }
@@ -749,7 +749,7 @@ async def get_scoreboard(
 ]
 
 
-    print("🏁 COMPETITION DATES:", competition["starts_at"], "->", competition["ends_at"])
+    print("🏁 COMPETITION DATES:", competition.get("activated_at") or competition["starts_at"], "->", competition["ends_at"])
     print("📋 PIPELINE MATCH:", pipeline[0]["$match"])
 
     cursor = db.sales_reports.aggregate(pipeline)
@@ -822,9 +822,9 @@ async def get_scoreboard_history(
             "$match": {
                 "user_id": {"$in": participants},
                 "competition_id": competition["_id"],
-                # 🔥 STRICT DATE: Ay başı/sonu kuralına uymayanları (erken yüklenenler vb) ele
+                # 🔥 STRICT DATE: activated_at varsa onu kullan (admin anında başlatabilir)
                 "createdAt": {
-                    "$gte": competition["starts_at"],
+                    "$gte": competition.get("activated_at") or competition["starts_at"],
                     "$lte": competition["ends_at"],
                 }
             }
