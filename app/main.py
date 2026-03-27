@@ -32,6 +32,8 @@ ALLOWED_ORIGINS = [
     "https://rose-admin.vercel.app",
     "https://larosee.com.tr",
     "https://www.larosee.com.tr",
+    "https://la-rosewebsite.vercel.app",
+    "https://la-rosewebsite-1gri.vercel.app",
     "http://localhost:5173",
     "http://localhost:3000",
 ]
