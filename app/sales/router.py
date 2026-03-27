@@ -110,11 +110,21 @@ async def save_sales_from_scan(
         visibility_query["createdAt"] = {"$gte": effective_finish}
         print(f"🕒 Normal visibility threshold for {current_user['email']}: {effective_finish}")
 
-    # HAFTALIK KONTROL (Mevcut modumuzda raporumuz var mı?)
+    # createdAt çakışmasını önle: visibility_query içindeki createdAt varsa
+    # haftalık/aylık aralıklarla max() kullanarak birleştir
+    vis_created_at_gte = None
+    if "createdAt" in visibility_query:
+        vis_created_at_gte = visibility_query["createdAt"]["$gte"]
+    vis_extra = {k: v for k, v in visibility_query.items() if k != "createdAt"}
+
+    weekly_gte = max(week_start, vis_created_at_gte) if vis_created_at_gte else week_start
+    monthly_gte = max(month_start, vis_created_at_gte) if vis_created_at_gte else month_start
+
+    # HAFTALIK KONTROL
     weekly_reports = await db.sales_reports.find({
         "user_id": current_user["_id"],
-        "createdAt": {"$gte": week_start, "$lt": week_end},
-        **visibility_query
+        "createdAt": {"$gte": weekly_gte, "$lt": week_end},
+        **vis_extra
     }).to_list(None)
 
     weekly_count = len(weekly_reports)
@@ -128,8 +138,8 @@ async def save_sales_from_scan(
     # AYLIK KONTROL
     monthly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
-        "createdAt": {"$gte": month_start, "$lt": next_month},
-        **visibility_query
+        "createdAt": {"$gte": monthly_gte, "$lt": next_month},
+        **vis_extra
     })
 
     if monthly_count >= 4:

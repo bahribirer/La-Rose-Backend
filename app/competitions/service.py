@@ -26,8 +26,11 @@ async def get_next_competition():
 # ================= STATUS =================
 
 async def get_user_competition_status(user_id: ObjectId):
+    import logging
+    logger = logging.getLogger("competitions.status")
     now_tr_time = now_tr()
     now_utc = datetime.utcnow()
+    logger.warning(f"🔍 STATUS CHECK user_id={user_id} now_utc={now_utc}")
 
     # 🔥 KULLANICININ LİGİNİ BUL (eczanesinden)
     user_profile = await db.user_profiles.find_one({"user_id": user_id})
@@ -60,6 +63,7 @@ async def get_user_competition_status(user_id: ObjectId):
     }
     current = await db.competitions.find_one(current_query)
     accepted = None  # 🔥 Güvenli tanım — aşağıdaki bloklarda kullanılacak
+    logger.warning(f"🔍 current={current is not None}, current_id={current.get('_id') if current else 'N/A'}, user_league={user_league}")
 
     if current:
         # 🛡️ OTO-AKTİVASYON (Admin başlatmayı unutmuşsa veya 1 Ocak geldiyse)
@@ -120,20 +124,22 @@ async def get_user_competition_status(user_id: ObjectId):
             }
 
     # 3️⃣ MİSSED / ENDED DURUMLARI (Eğer ne accepted ne de registered_next değilsek)
+    logger.warning(f"🔍 SECTION3: current={current is not None}, accepted={accepted is not None}, next_comp={next_comp is not None}")
     if current:
         # Eğer aktif yarışma varsa ama katılmamışsam (ve yukarıda registered_next çıkmadıysa)
         is_finished_individually = False
         if accepted and accepted.get("finished_at") and accepted["finished_at"] <= now_utc:
             is_finished_individually = True
-            
+
         if not is_finished_individually:
             # Lig bazlı yarışmalarda kayıt her zaman açık
-            _has_league = next_comp and next_comp.get("league")
+            _has_league = bool(next_comp and next_comp.get("league"))
             _can_reg = _has_league or (is_registration_period_tr() and next_comp is not None)
+            logger.warning(f"✅ RETURNING MISSED for user {user_id}")
             return {
                 "status": "missed",
                 "competition": current,
-                "can_register_next": _can_reg,
+                "can_register_next": bool(_can_reg),
             }
 
     # Kayıt açık mı?
@@ -174,10 +180,12 @@ async def get_user_competition_status(user_id: ObjectId):
         "ends_at": {"$gte": now_utc},
     })
     if global_active:
+        logger.warning(f"⚠️ RETURNING NONE (global_active) for user {user_id}")
         return {
             "status": "none",
-            "competition": global_active,  # Başka ligin yarışması (lig bilgisi için)
+            "competition": global_active,
         }
 
+    logger.warning(f"⚠️ RETURNING NONE (fallback) for user {user_id}")
     return {"status": "none"}
 

@@ -20,7 +20,11 @@ router = APIRouter(
 
 @router.get("/status")
 async def get_status(current_user=Depends(get_current_db_user)):
+    import logging
+    logger = logging.getLogger("competitions.router")
+
     res = await get_user_competition_status(current_user["_id"])
+    logger.warning(f"📡 STATUS RESULT: status={res.get('status')}, has_comp={'competition' in res}")
 
     response = {
         "status": res["status"],
@@ -41,6 +45,7 @@ async def get_status(current_user=Depends(get_current_db_user)):
             "prizes": c.get("prizes", []),
         }
 
+    logger.warning(f"📡 FINAL RESPONSE: {response}")
     return response
 
 # =====================================================
