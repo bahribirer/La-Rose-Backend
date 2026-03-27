@@ -251,16 +251,26 @@ async def list_sales_reports(
         visibility_query["createdAt"] = {"$gte": effective_finish}
 
     # ====== COUNTS (For UI Progress Bars) ======
+    # createdAt çakışmasını önle: visibility_query içindeki createdAt varsa
+    # haftalık/aylık aralıklarla max() kullanarak birleştir
+    vis_created_at_gte = None
+    if "createdAt" in visibility_query:
+        vis_created_at_gte = visibility_query["createdAt"]["$gte"]
+    vis_extra = {k: v for k, v in visibility_query.items() if k != "createdAt"}
+
+    weekly_gte = max(week_start, vis_created_at_gte) if vis_created_at_gte else week_start
+    monthly_gte = max(month_start, vis_created_at_gte) if vis_created_at_gte else month_start
+
     weekly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
-        "createdAt": {"$gte": week_start, "$lt": week_end},
-        **visibility_query
+        "createdAt": {"$gte": weekly_gte, "$lt": week_end},
+        **vis_extra
     })
 
     monthly_count = await db.sales_reports.count_documents({
         "user_id": current_user["_id"],
-        "createdAt": {"$gte": month_start, "$lt": next_month},
-        **visibility_query
+        "createdAt": {"$gte": monthly_gte, "$lt": next_month},
+        **vis_extra
     })
 
     # ====== PAGINATION & LISTING ======
