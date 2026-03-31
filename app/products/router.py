@@ -246,7 +246,7 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 
 @router.post("/admin/upload-image", dependencies=[Depends(admin_required)])
@@ -263,7 +263,7 @@ async def upload_product_image(file: UploadFile = File(...)):
     # Read and validate size
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(400, detail="Dosya boyutu 5MB'dan büyük olamaz")
+        raise HTTPException(400, detail="Dosya boyutu 50MB'dan büyük olamaz")
 
     # Generate unique filename
     unique_name = f"{uuid.uuid4().hex}{ext}"
