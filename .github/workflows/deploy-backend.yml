@@ -145,7 +145,7 @@ jobs:
             TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
             TWILIO_VERIFY_SID=${{ secrets.TWILIO_VERIFY_SID }}
             TWILIO_FROM_NUMBER=${{ secrets.TWILIO_FROM_NUMBER }}
-            API_BASE_URL=https://api.rosapmobile.com
+            API_BASE_URL=${{ secrets.API_BASE_URL }}
             GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
             EOF
 
@@ -155,19 +155,19 @@ jobs:
 
             # Docker Compose ile backend'i ayağa kaldır (Build gerektirmez, mevcut imajı kullanır)
             echo "🚀 STEP 6: Starting with Compose..."
-            # Proje ismini 'rosap' olarak sabitliyoruz ki la-rosee-backend ismini aramasın
+            # Proje ismini sabitleyelim ki Compose doğru container'ı hedeflesin
             docker compose -p rosap -f docker-compose.rosap.yml up -d --no-build backend
 
             echo "⏳ Waiting for startup..."
             sleep 15
 
             echo "🌐 STEP 6: SSL Certificate Check & Nginx Reload..."
-            # SSL Sertifikası yoksa almayı dene (api.rosapmobile.com)
-            if [ ! -d "/home/ec2-user/la-rosee/certbot/conf/live/api.rosapmobile.com" ]; then
+            # SSL Sertifikası yoksa almayı dene
+            if [ ! -d "${{ secrets.EC2_PROJECT_DIR }}/certbot/conf/live/${{ secrets.API_DOMAIN }}" ]; then
               echo "🔒 SSL certificate not found. Requesting new certificate..."
               docker run --rm -v $(pwd)/certbot/conf:/etc/letsencrypt -v $(pwd)/certbot/www:/var/www/certbot \
                 certbot/certbot certonly --webroot -w /var/www/certbot \
-                -d api.rosapmobile.com --email bahribirer@gmail.com --agree-tos --no-eff-email --non-interactive || echo "⚠️ SSL generation failed (DNS might not be ready)"
+                -d ${{ secrets.API_DOMAIN }} --email ${{ secrets.SSL_EMAIL }} --agree-tos --no-eff-email --non-interactive || echo "⚠️ SSL generation failed (DNS might not be ready)"
             fi
 
             # Nginx ayarlarını test et ve reload/restart et
@@ -192,10 +192,10 @@ jobs:
             echo "📋 Container logs (last 30 lines):"
             docker logs rosap-backend --tail 30 2>&1 || echo "(no container found)"
             echo ""
-            echo "📁 File checks (looking in /home/ec2-user/creds):"
+            echo "📁 File checks:"
             ls -la .env 2>/dev/null && echo ".env exists" || echo ".env NOT FOUND!"
-            ls -la /home/ec2-user/creds/firebase.json 2>/dev/null && echo "firebase.json exists" || echo "firebase.json NOT FOUND!"
-            ls -la /home/ec2-user/creds/google.json 2>/dev/null && echo "google.json exists" || echo "google.json NOT FOUND!"
+            ls -la ${{ secrets.EC2_PROJECT_DIR }}/app/creds/firebase.json 2>/dev/null && echo "firebase.json exists" || echo "firebase.json NOT FOUND!"
+            ls -la ${{ secrets.EC2_PROJECT_DIR }}/app/creds/google.json 2>/dev/null && echo "google.json exists" || echo "google.json NOT FOUND!"
             echo ""
             HEALTH=$(curl -sf http://localhost:8001/health 2>/dev/null)
             if [ $? -eq 0 ]; then

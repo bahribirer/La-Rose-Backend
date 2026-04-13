@@ -1,10 +1,11 @@
+import os
 from google.cloud import documentai
 from google.api_core.client_options import ClientOptions
 
 
-PROJECT_ID = "548043448414"
-LOCATION = "us"
-LAYOUT_PROCESSOR_ID = "797182a5b661bed8"
+PROJECT_ID = os.environ.get("DOCAI_PROJECT_ID", "")
+LOCATION = os.environ.get("DOCAI_LOCATION", "us")
+LAYOUT_PROCESSOR_ID = os.environ.get("DOCAI_LAYOUT_PROCESSOR_ID", "")  # Document AI Layout Processor ID
 
 
 def read_with_layout_parser(file_path: str):

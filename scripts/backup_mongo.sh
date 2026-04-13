@@ -1,11 +1,11 @@
 #!/bin/bash
 # ============================================================
 # La Rosee MongoDB Backup
-# Cron: 0 3 * * * /home/ec2-user/la-rosee/scripts/backup_mongo.sh
+# Cron: 0 3 * * * /home/YOUR_SERVER_USER/YOUR_PROJECT_DIR/scripts/backup_mongo.sh
 # ============================================================
 set -e
 
-BACKUP_DIR="/home/ec2-user/backups/mongo"
+BACKUP_DIR="${BACKUP_DIR:-/home/YOUR_SERVER_USER/backups/mongo}"  # ⚠️ Sunucu kullanıcınıza göre ayarlayın veya BACKUP_DIR env ile geçersiz kılın
 DATE=$(date +%Y%m%d_%H%M%S)
 RETENTION_DAYS=30
 

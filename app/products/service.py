@@ -17,8 +17,7 @@ def get_absolute_image_url(url: Optional[str]) -> Optional[str]:
     # Use API_BASE_URL from env if available
     base_url = os.getenv("API_BASE_URL", "").rstrip("/")
     if not base_url:
-        # Fallback to a default if env is missing (better to have env set)
-        base_url = "https://api.rosapmobile.com"
+        return url  # env set edilmemişse relative URL olarak döner
     return f"{base_url}{url}"
 
 async def load_products_public() -> List[Dict]:

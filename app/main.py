@@ -25,18 +25,15 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# 🔐 CORS — production'da sıkılaştır
+# 🔐 CORS — production'da CORS_ALLOWED_ORIGINS env değişkenini virgülle ayırarak set edin
+# Örnek: CORS_ALLOWED_ORIGINS=https://admin.example.com,https://www.example.com
+_cors_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
+_extra_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+
 ALLOWED_ORIGINS = [
-    "https://admin.rosapmobile.com",
-    "https://rosa-admin.vercel.app",
-    "https://rose-admin.vercel.app",
-    "https://larosee.com.tr",
-    "https://www.larosee.com.tr",
-    "https://la-rosewebsite.vercel.app",
-    "https://la-rosewebsite-1gri.vercel.app",
     "http://localhost:5173",
     "http://localhost:3000",
-]
+] + _extra_origins
 
 app.add_middleware(
     CORSMiddleware,
@@ -90,13 +87,10 @@ app.include_router(field_visits_router)
 @app.on_event("startup")
 async def migrate_representative_roles():
     """Mevcut mümessillerin ve panel erişimi olan kullanıcıların role'ünü güncelle."""
-    # 1) Hardcoded 4 mümessil
-    representative_emails = [
-        "seyma@marlakozmetik.com",
-        "berkay@marlakozmetik.com",
-        "duygu@marlakozmerik.com",
-        "birsen@marlakozmetik.com",
-    ]
+    # 1) Mümessil e-postaları — REPRESENTATIVE_EMAILS env değişkeninden okunur
+    # Örnek: REPRESENTATIVE_EMAILS=personel1@firma.com,personel2@firma.com
+    _rep_env = os.getenv("REPRESENTATIVE_EMAILS", "")
+    representative_emails = [e.strip() for e in _rep_env.split(",") if e.strip()]
     r1 = await db.users.update_many(
         {"email": {"$in": representative_emails}, "role": {"$ne": "representative"}},
         {"$set": {"role": "representative"}}

@@ -3,12 +3,12 @@ from google.cloud import documentai
 from google.api_core.client_options import ClientOptions
 from google.oauth2 import service_account
 
-PROJECT_ID = "548043448414"
-LOCATION = "us"
-PROCESSOR_ID = "d9cefd8bf7d33096" # Custom Trained Processor (v2)
+PROJECT_ID = os.environ.get("DOCAI_PROJECT_ID", "")
+LOCATION = os.environ.get("DOCAI_LOCATION", "us")
+PROCESSOR_ID = os.environ.get("DOCAI_PROCESSOR_ID", "")  # Document AI Custom Trained Processor ID
 
 # Explicitly load Document AI credentials (firebase.py overrides GOOGLE_APPLICATION_CREDENTIALS)
-_DOCAI_CREDS_PATH = os.environ.get("DOCAI_CREDENTIALS_PATH") or "/home/ec2-user/creds/google.json"
+_DOCAI_CREDS_PATH = os.environ.get("DOCAI_CREDENTIALS_PATH", "app/creds/google.json")
 
 IS_CI_MOCK = os.environ.get("CI_MOCK", "false").lower() == "true"
 if IS_CI_MOCK:

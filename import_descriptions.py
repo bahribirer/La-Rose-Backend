@@ -3,12 +3,13 @@ Excel'deki ürün açıklamalarını MongoDB'ye yükler.
 Çalıştır: python import_descriptions.py
 """
 import asyncio
+import os
 import pandas as pd
 from motor.motor_asyncio import AsyncIOMotorClient
 
 MONGO_URI = "mongodb://localhost:27017"
 DB_NAME = "rosap_db"
-EXCEL_PATH = "/Users/bahribirer/Downloads/La Rosee Ürün detayları revize 2.xlsx"
+EXCEL_PATH = os.environ.get("EXCEL_PATH", "data/products.xlsx")  # ⚠️ Excel dosyasının yolunu EXCEL_PATH env ile geçin
 
 async def main():
     client = AsyncIOMotorClient(MONGO_URI)
